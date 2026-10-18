@@ -4,10 +4,11 @@ module.exports = async function handler(req, res) {
 
     try {
         const TARGET_URL = "https://xoiche.live";
-        const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(TARGET_URL)}`;
+        // Thay đổi sang corsproxy.io giúp tốc độ load nhanh và ổn định hơn
+        const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(TARGET_URL)}`;
         
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 6000);
+        const timeoutId = setTimeout(() => controller.abort(), 8000);
 
         let response;
         try {
