@@ -95,8 +95,9 @@ module.exports = async function handler(req, res) {
             
             const sortedLeagues = KNOWN_LEAGUES.sort((x, y) => y.length - x.length);
             for (let lg of sortedLeagues) {
-                let regexLg = new RegExp(`^${lg.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s+`, "ig");
-                clean = clean.replace(regexLg, '');
+                // Thêm biên từ hoặc khoảng trắng để tránh dính liền chữ cái đầu của đội (vd: Serie A + AC Milan)
+                let regexLg = new RegExp(`(^|\\s+)${lg.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(\\s+|$)`, "ig");
+                clean = clean.replace(regexLg, ' ');
             }
             return ultraClean(clean);
         }
@@ -108,11 +109,15 @@ module.exports = async function handler(req, res) {
         while ((match = aTagRegex.exec(html)) !== null) {
             const href = match[1];
             let rawText = match[2].replace(/<[^>]*>/g, '').trim();
-            if (!href || !(/(\/tran-dau\/|\/truc-tiep\/|\/live\/|\/xem\/)/.test(href))) continue;
+            
+            // Mở rộng bộ lọc href để bắt mọi đường dẫn trực tiếp / trận đấu / live / xem
+            if (!href || !(/(\/tran-dau\/|\/truc-tiep\/|\/live\/|\/xem\/|\/phat-truc-tiep\/)/.test(href))) continue;
             if (!rawText || rawText.length < 5) continue;
 
             let text = rawText.replace(/\n/g, ' ').replace(/\s+/g, ' ').trim();
-            const isMatch = /VS|vs|Trực tiếp|Sắp diễn ra|\b\d{1,3}'|\b\d{1,2}\s*[:\-]\s*\d{1,2}\b/i.test(text);
+            
+            // Nhận diện trận đấu (bao gồm cả trận đang đá có tỷ số / phút đấu / live)
+            const isMatch = /VS|vs|Trực tiếp|Sắp diễn ra|Đang đá|Live|\b\d{1,3}'|\b\d{1,2}\s*[:\-]\s*\d{1,2}\b/i.test(text);
             if (!isMatch) continue;
 
             let timeStr = "", dateStr = "";
@@ -131,11 +136,12 @@ module.exports = async function handler(req, res) {
             if (text.includes('/')) {
                 let partsSlash = text.split('/');
                 let lastPart = partsSlash[partsSlash.length - 1];
-                if (/VS|vs/i.test(lastPart)) {
+                if (/VS|vs/i.test(lastPart) || /\d{1,2}\s*[:\-]\s*\d{1,2}/.test(lastPart)) {
                     text = lastPart;
                 }
             }
 
+            // Thay thế tỷ số trận đang đá (vd: 0:1, 0-0) thành VS để chuẩn hóa
             text = text.replace(/\b\d{1,2}\s*[:\-]\s*\d{1,2}\b/g, ' VS ');
             text = text.replace(/\s+-\s+/g, ' VS ').replace(/\bvs\b/gi, ' VS ');
             text = text.replace(/\b\d{1,3}(\+\d+)?'/g, ' ');
@@ -153,7 +159,8 @@ module.exports = async function handler(req, res) {
             const sortedBlvs = Object.keys(blvStreamMap).sort((x, y) => y.length - x.length);
             for (let blv of sortedBlvs) {
                 let escapeBlv = blv.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-                let regex = new RegExp(`(BLV\\s*\\-\\s*)?(${escapeBlv})`, "gi");
+                // Xử lý triệt để từ "BLV" đứng liền trước tên BLV (vd: AtalantaBLV -> Atalanta)
+                let regex = new RegExp(`(BLV\\s*\\-\\s*|BLV\\s*)?(${escapeBlv})`, "gi");
                 if (regex.test(text)) {
                     let stdName = (blv === "Gà") ? "Gà Rừng" : (blv === "Pháo") ? "Pháo Thủ" : blv;
                     if (!foundBlvs.includes(stdName)) foundBlvs.push(stdName);
@@ -207,16 +214,12 @@ module.exports = async function handler(req, res) {
         const results = [];
         const vlcOpt = "#EXTVLCOPT:http-user-agent=Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36";
 
-        const now = new Date();
-        const defaultDate = `${String(now.getDate()).padStart(2, '0')}/${String(now.getMonth() + 1).padStart(2, '0')}`;
+        // Đổi tên nhóm thành Xôi Chè TV theo yêu cầu
+        const groupTitle = "Xôi Chè TV";
 
         for (let key in matchDict) {
             const data = matchDict[key];
             const timeStr = data.timeDate ? `[${data.timeDate}] ` : "";
-            
-            const dateMatch = data.timeDate ? data.timeDate.match(/\b\d{1,2}\/\d{1,2}\b/) : null;
-            const matchDate = dateMatch ? dateMatch[0] : defaultDate;
-            const groupTitle = `🔥 Trận Tâm Điểm ${matchDate}`;
 
             if (data.blvs.length > 0) {
                 data.blvs.forEach(blv => {
