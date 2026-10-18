@@ -1,6 +1,6 @@
 const cheerio = require('cheerio');
 
-export default async function handler(req, res) {
+module.exports = async function handler(req, res) {
     try {
         const BASE_DOMAIN = "https://xoiche.live";
         
@@ -248,4 +248,4 @@ export default async function handler(req, res) {
         res.setHeader('Content-Type', 'text/plain; charset=utf-8');
         return res.status(500).send("#EXTM3U\n\n#EXTINF:-1, Lỗi xử lý Server: " + error.message);
     }
-}
+};
