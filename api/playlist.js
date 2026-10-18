@@ -1,23 +1,22 @@
 const cheerio = require('cheerio');
 
 module.exports = async function handler(req, res) {
-    // Đảm bảo luôn trả về Content-Type chuẩn M3U và mã 200 để ứng dụng không bị lỗi 500
     res.setHeader('Content-Type', 'text/plain; charset=utf-8');
     res.setHeader('Cache-Control', 's-maxage=60, stale-while-revalidate=30');
 
     try {
-        const BASE_DOMAIN = "https://xoiche.live";
+        const TARGET_URL = "https://xoiche.live";
+        // Sử dụng cổng trung gian mã hóa để vượt qua bộ lọc chặn IP của Cloudflare trên Vercel
+        const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(TARGET_URL)}`;
         
-        const response = await fetch(BASE_DOMAIN, {
+        const response = await fetch(proxyUrl, {
             headers: {
-                'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1',
-                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-                'Accept-Language': 'vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7'
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
             }
         });
         
         if (!response.ok) {
-            throw new Error(`Trang chủ phản hồi mã lỗi: ${response.status}`);
+            throw new Error(`Không thể tải dữ liệu qua cổng trung gian: ${response.status}`);
         }
 
         const html = await response.text();
@@ -76,7 +75,7 @@ module.exports = async function handler(req, res) {
         $('img').each((_, img) => {
             let src = $(img).attr('src') \vert{}\vert{}$(img).attr('data-src') || '';
             if (src.toLowerCase().includes('logo') && !src.toLowerCase().includes('svg')) {
-                mainSiteLogo = src.startsWith('http') ? src : BASE_DOMAIN + (src.startsWith('/') ? '' : '/') + src;
+                mainSiteLogo = src.startsWith('http') ? src : TARGET_URL + (src.startsWith('/') ? '' : '/') + src;
                 return false; 
             }
         });
@@ -204,7 +203,7 @@ module.exports = async function handler(req, res) {
 
             const formattedTeams = `${team1} VS ${team2}`;
             const dictKey = `${team1} VS ${team2} - ${timeDateDisplay}`;
-            const fullUrl = href.startsWith('http') ? href : (href.startsWith('/') ? BASE_DOMAIN + href : BASE_DOMAIN + '/' + href);
+            const fullUrl = href.startsWith('http') ? href : (href.startsWith('/') ? TARGET_URL + href : TARGET_URL + '/' + href);
 
             if (!matchDict[dictKey]) {
                 matchDict[dictKey] = { 
@@ -243,13 +242,12 @@ module.exports = async function handler(req, res) {
         }
 
         const finalM3U = results.length === 0 
-            ? "#EXTM3U\n\n#EXTINF:-1, Không tìm thấy trận đấu nào trên trang web." 
+            ? "#EXTM3U\n\n#EXTINF:-1, Không tìm thấy trận đấu." 
             : "#EXTM3U\n\n" + results.join("\n\n");
 
         return res.status(200).send(finalM3U);
 
     } catch (error) {
-        // Trả về mã 200 kèm nội dung lỗi dạng M3U để ứng dụng không bị văng lỗi 500
-        return res.status(200).send(`#EXTM3U\n\n#EXTINF:-1, Lỗi Server: ${error.message}`);
+        return res.status(200).send(`#EXTM3U\n\n#EXTINF:-1, Lỗi kết nối: ${error.message}`);
     }
 };
