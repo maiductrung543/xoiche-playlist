@@ -4,8 +4,8 @@ module.exports = async function handler(req, res) {
 
     try {
         const TARGET_URL = "https://xoiche.live";
-        // Thay đổi sang corsproxy.io giúp tốc độ load nhanh và ổn định hơn
-        const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(TARGET_URL)}`;
+        // Chuyển sang proxy codetabs ít bị chặn hơn
+        const proxyUrl = `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(TARGET_URL)}`;
         
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 8000);
@@ -14,7 +14,10 @@ module.exports = async function handler(req, res) {
         try {
             response = await fetch(proxyUrl, {
                 headers: {
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+                    'Accept-Language': 'vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7',
+                    'Referer': 'https://xoiche.live/'
                 },
                 signal: controller.signal
             });
