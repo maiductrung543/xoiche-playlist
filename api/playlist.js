@@ -1,17 +1,23 @@
 const cheerio = require('cheerio');
 
 module.exports = async function handler(req, res) {
+    // Đảm bảo luôn trả về Content-Type chuẩn M3U và mã 200 để ứng dụng không bị lỗi 500
+    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+    res.setHeader('Cache-Control', 's-maxage=60, stale-while-revalidate=30');
+
     try {
         const BASE_DOMAIN = "https://xoiche.live";
         
         const response = await fetch(BASE_DOMAIN, {
             headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+                'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                'Accept-Language': 'vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7'
             }
         });
         
         if (!response.ok) {
-            throw new Error(`Không thể truy cập trang nguồn: ${response.statusText}`);
+            throw new Error(`Trang chủ phản hồi mã lỗi: ${response.status}`);
         }
 
         const html = await response.text();
@@ -237,15 +243,13 @@ module.exports = async function handler(req, res) {
         }
 
         const finalM3U = results.length === 0 
-            ? "#EXTM3U\n\n#EXTINF:-1, Không tìm thấy trận đấu nào." 
+            ? "#EXTM3U\n\n#EXTINF:-1, Không tìm thấy trận đấu nào trên trang web." 
             : "#EXTM3U\n\n" + results.join("\n\n");
 
-        res.setHeader('Content-Type', 'text/plain; charset=utf-8');
-        res.setHeader('Cache-Control', 's-maxage=60, stale-while-revalidate=30');
         return res.status(200).send(finalM3U);
 
     } catch (error) {
-        res.setHeader('Content-Type', 'text/plain; charset=utf-8');
-        return res.status(500).send("#EXTM3U\n\n#EXTINF:-1, Lỗi xử lý Server: " + error.message);
+        // Trả về mã 200 kèm nội dung lỗi dạng M3U để ứng dụng không bị văng lỗi 500
+        return res.status(200).send(`#EXTM3U\n\n#EXTINF:-1, Lỗi Server: ${error.message}`);
     }
 };
