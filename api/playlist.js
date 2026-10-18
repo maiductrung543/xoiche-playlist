@@ -5,7 +5,6 @@ module.exports = async function handler(req, res) {
     try {
         const TARGET_URL = "https://xoiche.live";
         
-        // Gọi trực tiếp xoiche.live từ Vercel serverless (không bị dính CORS)
         const response = await fetch(TARGET_URL, {
             headers: {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
@@ -50,12 +49,13 @@ module.exports = async function handler(req, res) {
         };
 
         const KNOWN_LEAGUES = [
+            "SAUDI LEAGUE", "SAUDI PRO LEAGUE", "LIGA IU", "LIGA I", "LIGA II", "LIGA MX", "LIGA",
             "AFRICA CUP OF NATIONS QUALIFICATION", "AFRICA CUP OF NATIONS QUALIFIERS", "AFRICA CUP OF NATIONS", 
             "AFCON QUALIFICATION", "AFCON QUALIFIERS", "AFCON", "WORLD CUP QUALIFICATION", "WORLD CUP QUALIFIERS", 
             "WC QUALIFICATION", "WC QUALIFIERS", "UEFA EURO QUALIFICATION", "EURO QUALIFICATION", 
             "UEFA NATIONS LEAGUE", "NATIONS LEAGUE", "SULTANLAR LIGI NỮ", "SULTANLAR LIGI", 
             "SV.LEAGUE NHẬT BẢN", "SV.LEAGUE", "SERIE A1 Ý", "SERIE A1", "TAURON LIGA BA LAN NỮ", "TAURON LIGA",
-            "ELITESERIEN", "LIGA MX", "INDIAN SUPER LEAGUE", "ACL ELITE", "ELITE", "UEFA", "AFC", 
+            "ELITESERIEN", "INDIAN SUPER LEAGUE", "SUPER LEAGUE", "ACL ELITE", "ELITE", "UEFA", "AFC", 
             "CÚP VÙNG VỊNH", "CUP VÙNG VỊNH", "GULF CUP", "CÚP QUỐC GIA", "CUP QUỐC GIA", "NATIONAL CUP",
             "ASIAD WOMEN", "ASIAD U23", "ASIAD", "ASIAN GAMES", "FF ASEAN CUP", "ASEAN CUP", "AFF CUP",
             "GIAO HỮU QT", "GIAO HỮU QUỐC TẾ", "GIAO HỮU CLB", "GIAO HỮU", "CLUB FRIENDLIES", "FRIENDLY",
@@ -63,11 +63,11 @@ module.exports = async function handler(req, res) {
             "PREMIER LEAGUE", "NGOẠI HẠNG ANH", "LA LIGA 2", "LA LIGA", "SERIE B", "SERIE A", 
             "BUNDESLIGA 2", "BUNDESLIGA", "LIGUE 2", "LIGUE 1", "CHAMPIONS LEAGUE", "CÚP C1", 
             "EUROPA LEAGUE", "CÚP C2", "CONFERENCE LEAGUE", "CÚP C3", "CÚP C4", "AFC CHAMPIONS LEAGUE", 
-            "AFC CUP", "FA CUP", "CARABAO CUP", "CÚP NHÀ VUA", "COPPA ITALIA", "MLS", "SAUDI PRO LEAGUE", 
+            "AFC CUP", "FA CUP", "CARABAO CUP", "CÚP NHÀ VUA", "COPPA ITALIA", "MLS", 
             "WORLD CUP", "FIFA WORLD CUP", "COPPA AMERICA", "EURO", "SIÊU CÚP", "SUPER CUP",
             "CÚP LIÊN ĐOÀN", "CUP LIÊN ĐOÀN", "HẠNG NHẤT ANH", "CHAMPIONSHIP", "J-LEAGUE", "J1 LEAGUE", 
-            "K-LEAGUE", "THAI LEAGUE", "SPA D1", "SPA D2", "SPA D3", "ENG PR", "ENG CH", "ENG D1", "ENG D2", 
-            "ITA A", "ITA B", "GER 1", "GER 2", "FRA 1", "FRA 2"
+            "K-LEAGUE", "THAI LEAGUE", "EREDIVISIE", "PRIMEIRA LIGA", "SPA D1", "SPA D2", "SPA D3", 
+            "ENG PR", "ENG CH", "ENG D1", "ENG D2", "ITA A", "ITA B", "GER 1", "GER 2", "FRA 1", "FRA 2"
         ];
 
         let mainSiteLogo = "https://cdn-icons-png.flaticon.com/512/8112/8112602.png";
@@ -90,12 +90,18 @@ module.exports = async function handler(req, res) {
         function extractCleanTeam(teamStr) {
             if (!teamStr) return "";
             let clean = teamStr;
+
+            // 1. Tách chữ dính liền kiểu CamelCase: vd "Saudi LeagueAl Fayha" -> "Al Fayha"
+            clean = clean.replace(/([a-z])([A-Z])/g, '$1 $2');
+
+            // 2. Xóa các tên giải đấu đứng ở đầu
             const sortedLeagues = KNOWN_LEAGUES.slice().sort((x, y) => y.length - x.length);
             for (let lg of sortedLeagues) {
                 let escapeLg = lg.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
                 let regexLg = new RegExp(`^\\s*${escapeLg}\\s*`, "gi");
                 clean = clean.replace(regexLg, '');
             }
+
             clean = ultraClean(clean);
             clean = clean.replace(/^[W|M]\s+/i, '');
             clean = clean.replace(/^\d{1,2}[:\-]?\d{0,2}\s*/g, '');
@@ -110,6 +116,10 @@ module.exports = async function handler(req, res) {
             let text = rawText.replace(/\n/g, ' ').replace(/\s+/g, ' ').trim();
 
             let timeStr = "", dateStr = "";
+
+            // Nhận diện trận đang đá (vd: "33'", "Live", "Đang đá")
+            let isLive = /Đang đá|Đang live|\bLIVE\b|\b\d{1,3}'/i.test(text);
+
             const timeMatch = text.match(/\b([0-1]?[0-9]|2[0-3]):([0-5][0-9])\b/);
             if (timeMatch) { 
                 timeStr = timeMatch[0]; 
@@ -122,6 +132,7 @@ module.exports = async function handler(req, res) {
             }
             text = text.replace(/\b202\d\b/g, ' '); 
 
+            // Chuyển đổi tỷ số trận đang đá (vd: 0 : 1, 1 - 0) thành chữ ' VS '
             text = text.replace(/\b\d{1,2}\s*[:\-]\s*\d{1,2}\b/g, ' VS ');
             text = text.replace(/\s+-\s+/g, ' VS ').replace(/\bvs\b/gi, ' VS ');
             text = text.replace(/\b\d{1,3}(\+\d+)?'/g, ' ');
@@ -167,9 +178,11 @@ module.exports = async function handler(req, res) {
             let team2 = extractCleanTeam(parts[1]);
             if (!team1 || !team2) return; 
 
-            let timeDateDisplay = timeStr;
-            if (timeStr && dateStr) timeDateDisplay = `${timeStr} - ${dateStr}`;
-            else if (!timeStr && dateStr) timeDateDisplay = dateStr;
+            let timeDateDisplay = isLive ? "LIVE" : timeStr;
+            if (!isLive) {
+                if (timeStr && dateStr) timeDateDisplay = `${timeStr} - ${dateStr}`;
+                else if (!timeStr && dateStr) timeDateDisplay = dateStr;
+            }
 
             const formattedTeams = `${team1} VS ${team2}`;
             const dictKey = `${team1} VS ${team2} - ${timeDateDisplay}`;
