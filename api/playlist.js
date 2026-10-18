@@ -90,11 +90,8 @@ module.exports = async function handler(req, res) {
         function extractCleanTeam(teamStr) {
             if (!teamStr) return "";
             let clean = teamStr;
-
-            // 1. Tách chữ dính liền kiểu CamelCase: vd "Saudi LeagueAl Fayha" -> "Al Fayha"
             clean = clean.replace(/([a-z])([A-Z])/g, '$1 $2');
 
-            // 2. Xóa các tên giải đấu đứng ở đầu
             const sortedLeagues = KNOWN_LEAGUES.slice().sort((x, y) => y.length - x.length);
             for (let lg of sortedLeagues) {
                 let escapeLg = lg.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -111,20 +108,94 @@ module.exports = async function handler(req, res) {
 
         const matchDict = {};
 
+        function addMatchToDict(href, team1Raw, team2Raw, timeVal, dateVal, blvNameRaw) {
+            let team1 = extractCleanTeam(team1Raw);
+            let team2 = extractCleanTeam(team2Raw);
+            if (!team1 || !team2) return;
+
+            let timeDisplay = timeVal || "";
+            let dateDisplay = dateVal || "";
+
+            // Định dạng ngày giờ dạng "22:15 - 18/10" hoặc "22:15"
+            let timeDateDisplay = "";
+            if (timeDisplay && dateDisplay) {
+                timeDateDisplay = `${timeDisplay} - ${dateDisplay.replace('-', '/')}`;
+            } else if (timeDisplay) {
+                timeDateDisplay = timeDisplay;
+            } else if (dateDisplay) {
+                timeDateDisplay = dateDisplay.replace('-', '/');
+            }
+
+            let foundBlvs = [];
+            if (blvNameRaw) {
+                let cleanBlv = blvNameRaw.replace(/BLV\s*/gi, '').trim();
+                const sortedBlvs = Object.keys(blvStreamMap).sort((x, y) => y.length - x.length);
+                for (let b of sortedBlvs) {
+                    if (cleanBlv.toLowerCase().includes(b.toLowerCase())) {
+                        let stdName = (b === "Gà") ? "Gà Rừng" : (b === "Pháo") ? "Pháo Thủ" : b;
+                        if (!foundBlvs.includes(stdName)) foundBlvs.push(stdName);
+                    }
+                }
+            }
+
+            const formattedTeams = `${team1} VS ${team2}`;
+            const dictKey = `${team1} VS ${team2} - ${timeDateDisplay}`;
+            const fullUrl = href.startsWith('http') ? href : (href.startsWith('/') ? TARGET_URL + href : TARGET_URL + '/' + href);
+
+            if (!matchDict[dictKey]) {
+                matchDict[dictKey] = { 
+                    timeDate: timeDateDisplay, 
+                    teams: formattedTeams,
+                    blvs: foundBlvs, 
+                    fallbackUrl: fullUrl 
+                };
+            } else {
+                for (let b of foundBlvs) {
+                    if (!matchDict[dictKey].blvs.includes(b)) matchDict[dictKey].blvs.push(b);
+                }
+            }
+        }
+
+        // 1. Phương pháp quét JSON Next.js (bắt toàn bộ trận đang đá + có ngày cụ thể)
+        const nextDataMatch = html.match(/<script[^>]*id=["']__NEXT_DATA__["'][^>]*>(.*?)<\/script>/s);
+        if (nextDataMatch && nextDataMatch[1]) {
+            try {
+                const nextData = JSON.parse(nextDataMatch[1]);
+                const pageProps = nextData?.props?.pageProps;
+                let matchesList = [];
+
+                if (Array.isArray(pageProps?.matches)) matchesList = pageProps.matches;
+                else if (Array.isArray(pageProps?.data?.matches)) matchesList = pageProps.data.matches;
+                else if (Array.isArray(pageProps?.hotMatches)) matchesList = pageProps.hotMatches;
+
+                for (let m of matchesList) {
+                    let home = m.home_name || m.homeTeam?.name;
+                    let away = m.away_name || m.awayTeam?.name;
+                    let time = m.match_time || m.time;
+                    let date = m.match_date || m.date;
+                    let slug = m.slug || m.id;
+                    let blv = m.commentator_name || m.blv_name || m.blv;
+
+                    if (home && away) {
+                        let href = slug ? `/tran-dau/${slug}` : '/';
+                        addMatchToDict(href, home, away, time, date, blv);
+                    }
+                }
+            } catch (e) {}
+        }
+
+        // 2. Phương pháp quét thẻ HTML thô bổ trợ
         function processRawMatch(href, rawText) {
             if (!href || !rawText || rawText.length < 4) return;
             let text = rawText.replace(/\n/g, ' ').replace(/\s+/g, ' ').trim();
 
             let timeStr = "", dateStr = "";
-
-            // Nhận diện trận đang đá (vd: "33'", "Live", "Đang đá")
-            let isLive = /Đang đá|Đang live|\bLIVE\b|\b\d{1,3}'/i.test(text);
-
             const timeMatch = text.match(/\b([0-1]?[0-9]|2[0-3]):([0-5][0-9])\b/);
             if (timeMatch) { 
                 timeStr = timeMatch[0]; 
                 text = text.replace(timeStr, ' '); 
             }
+
             const dateMatch = text.match(/\b(\d{1,2})[/-\s](\d{1,2})\b/);
             if (dateMatch) { 
                 dateStr = `${dateMatch[1]}/${dateMatch[2]}`; 
@@ -132,7 +203,6 @@ module.exports = async function handler(req, res) {
             }
             text = text.replace(/\b202\d\b/g, ' '); 
 
-            // Chuyển đổi tỷ số trận đang đá (vd: 0 : 1, 1 - 0) thành chữ ' VS '
             text = text.replace(/\b\d{1,2}\s*[:\-]\s*\d{1,2}\b/g, ' VS ');
             text = text.replace(/\s+-\s+/g, ' VS ').replace(/\bvs\b/gi, ' VS ');
             text = text.replace(/\b\d{1,3}(\+\d+)?'/g, ' ');
@@ -147,14 +217,13 @@ module.exports = async function handler(req, res) {
                 text = text.replace(regexLg, ' ');
             }
 
-            let foundBlvs = [];
+            let foundBlvText = "";
             const sortedBlvs = Object.keys(blvStreamMap).sort((x, y) => y.length - x.length);
             for (let blv of sortedBlvs) {
                 let escapeBlv = blv.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
                 let regex = new RegExp(`(BLV\\s*)?(${escapeBlv})`, "gi");
                 if (regex.test(text)) {
-                    let stdName = (blv === "Gà") ? "Gà Rừng" : (blv === "Pháo") ? "Pháo Thủ" : blv;
-                    if (!foundBlvs.includes(stdName)) foundBlvs.push(stdName);
+                    foundBlvText = blv;
                     text = text.replace(regex, ' '); 
                 }
             }
@@ -174,30 +243,7 @@ module.exports = async function handler(req, res) {
             let parts = text.split('VS').map(p => ultraClean(p)).filter(p => p.length > 0);
             if (parts.length < 2) return;
             
-            let team1 = extractCleanTeam(parts[0]);
-            let team2 = extractCleanTeam(parts[1]);
-            if (!team1 || !team2) return; 
-
-            let timeDateDisplay = isLive ? "LIVE" : timeStr;
-            if (!isLive) {
-                if (timeStr && dateStr) timeDateDisplay = `${timeStr} - ${dateStr}`;
-                else if (!timeStr && dateStr) timeDateDisplay = dateStr;
-            }
-
-            const formattedTeams = `${team1} VS ${team2}`;
-            const dictKey = `${team1} VS ${team2} - ${timeDateDisplay}`;
-            const fullUrl = href.startsWith('http') ? href : (href.startsWith('/') ? TARGET_URL + href : TARGET_URL + '/' + href);
-
-            if (!matchDict[dictKey]) {
-                matchDict[dictKey] = { 
-                    timeDate: timeDateDisplay, teams: formattedTeams,
-                    blvs: foundBlvs, fallbackUrl: fullUrl 
-                };
-            } else {
-                for (let b of foundBlvs) {
-                    if (!matchDict[dictKey].blvs.includes(b)) matchDict[dictKey].blvs.push(b);
-                }
-            }
+            addMatchToDict(href, parts[0], parts[1], timeStr, dateStr, foundBlvText);
         }
 
         const aTagRegex = /<a\s+[^>]*href=["']([^"']+)["'][^>]*>(.*?)<\/a>/gis;
