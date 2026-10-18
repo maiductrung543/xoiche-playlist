@@ -77,9 +77,27 @@ module.exports = async function handler(req, res) {
             mainSiteLogo = src.startsWith('http') ? src : TARGET_URL + (src.startsWith('/') ? '' : '/') + src;
         }
 
+        // Hàm giải mã mã hóa HTML Entities (Sửa triệt để lỗi 39;, amp;, quot;,...)
+        function decodeHTMLEntities(text) {
+            if (!text) return "";
+            return text
+                .replace(/&#(\d+);/g, (m, dec) => String.fromCharCode(dec))
+                .replace(/&#x([0-9a-f]+);/gi, (m, hex) => String.fromCharCode(parseInt(hex, 16)))
+                .replace(/&quot;/g, '"')
+                .replace(/&apos;/g, "'")
+                .replace(/&#39;/g, "'")
+                .replace(/&amp;/g, '&')
+                .replace(/&lt;/g, '<')
+                .replace(/&gt;/g, '>');
+        }
+
         function ultraClean(str) {
             if (!str) return "";
-            return str
+            let cleaned = decodeHTMLEntities(str);
+            return cleaned
+                // Loại bỏ tàn dư mã entity như "39;", "amp;" hoặc các số rác đứng ở đầu
+                .replace(/^\s*\d+;\s*/g, '')
+                .replace(/^[a-z]+;\s*/gi, '')
                 .replace(/[\u{1F300}-\u{1F5FF}\u{1F600}-\u{1F64F}\u{1F680}-\u{1F6FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{1F900}-\u{1F9FF}\u{1FA70}-\u{1FAFF}]/gu, ' ')
                 .replace(/^[^a-zA-Z0-9À-ỹ]+/g, '')
                 .replace(/[^a-zA-Z0-9À-ỹ]+$/g, '')
@@ -89,7 +107,7 @@ module.exports = async function handler(req, res) {
 
         function extractCleanTeam(teamStr) {
             if (!teamStr) return "";
-            let clean = teamStr;
+            let clean = decodeHTMLEntities(teamStr);
             clean = clean.replace(/([a-z])([A-Z])/g, '$1 $2');
 
             const sortedLeagues = KNOWN_LEAGUES.slice().sort((x, y) => y.length - x.length);
@@ -155,7 +173,7 @@ module.exports = async function handler(req, res) {
             }
         }
 
-        // 1. Trích xuất từ Next.js Data nhúng ngầm trong HTML
+        // 1. Trích xuất từ Next.js Data nhúng ngầm
         const nextDataMatch = html.match(/<script[^>]*id=["']__NEXT_DATA__["'][^>]*>(.*?)<\/script>/s);
         if (nextDataMatch && nextDataMatch[1]) {
             try {
@@ -173,12 +191,12 @@ module.exports = async function handler(req, res) {
             } catch (e) {}
         }
 
-        // 2. Quét toàn bộ khối HTML chính (bắt các trận đang đá có phút thi đấu, tỷ số, ngày)
+        // 2. Quét HTML thô
         const blockRegex = /<a\s+[^>]*href=["']([^"']+)["'][^>]*>(.*?)<\/a>/gis;
         let match;
         while ((match = blockRegex.exec(html)) !== null) {
             const href = match[1];
-            let rawText = match[2].replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+            let rawText = decodeHTMLEntities(match[2].replace(/<[^>]*>/g, ' ')).replace(/\s+/g, ' ').trim();
 
             let timeMatch = rawText.match(/\b([0-1]?[0-9]|2[0-3]):([0-5][0-9])\b/);
             let dateMatch = rawText.match(/\b(\d{1,2})[/-\s](\d{1,2})\b/);
