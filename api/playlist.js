@@ -8,7 +8,7 @@ module.exports = async function handler(req, res) {
         
         const response = await fetch(proxyUrl, {
             headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
             }
         });
         
@@ -47,24 +47,24 @@ module.exports = async function handler(req, res) {
         };
 
         const KNOWN_LEAGUES = [
-            "ELITE", "ACL ELITE", "UEFA", "AFC", "J1 LEAGUE", "SV.LEAGUE NHẬT BẢN", "SV.LEAGUE", 
-            "SULTANLAR LIGI NỮ", "SULTANLAR LIGI", "SERIE A1 Ý", "SERIE A1", 
-            "AFRICA CUP OF NATIONS QUALIFICATION", "AFRICA CUP OF NATIONS QUALIFIERS", 
-            "AFRICA CUP OF NATIONS", "AFCON QUALIFICATION", "AFCON QUALIFIERS", "AFCON",
-            "WORLD CUP QUALIFICATION", "WORLD CUP QUALIFIERS", "WC QUALIFICATION", "WC QUALIFIERS",
-            "UEFA EURO QUALIFICATION", "EURO QUALIFICATION", "UEFA NATIONS LEAGUE", "NATIONS LEAGUE",
+            "AFRICA CUP OF NATIONS QUALIFICATION", "AFRICA CUP OF NATIONS QUALIFIERS", "AFRICA CUP OF NATIONS", 
+            "AFCON QUALIFICATION", "AFCON QUALIFIERS", "AFCON", "WORLD CUP QUALIFICATION", "WORLD CUP QUALIFIERS", 
+            "WC QUALIFICATION", "WC QUALIFIERS", "UEFA EURO QUALIFICATION", "EURO QUALIFICATION", 
+            "UEFA NATIONS LEAGUE", "NATIONS LEAGUE", "SULTANLAR LIGI NỮ", "SULTANLAR LIGI", 
+            "SV.LEAGUE NHẬT BẢN", "SV.LEAGUE", "SERIE A1 Ý", "SERIE A1", "TAURON LIGA BA LAN NỮ", "TAURON LIGA",
+            "ELITESERIEN", "LIGA MX", "INDIAN SUPER LEAGUE", "ACL ELITE", "ELITE", "UEFA", "AFC", 
             "CÚP VÙNG VỊNH", "CUP VÙNG VỊNH", "GULF CUP", "CÚP QUỐC GIA", "CUP QUỐC GIA", "NATIONAL CUP",
             "ASIAD WOMEN", "ASIAD U23", "ASIAD", "ASIAN GAMES", "FF ASEAN CUP", "ASEAN CUP", "AFF CUP",
             "GIAO HỮU QT", "GIAO HỮU QUỐC TẾ", "GIAO HỮU CLB", "GIAO HỮU", "CLUB FRIENDLIES", "FRIENDLY",
             "V-LEAGUE 1", "V-LEAGUE 2", "V-LEAGUE", "V.LEAGUE 1", "V.LEAGUE 2", "V.LEAGUE",
-            "PREMIER LEAGUE", "NGOẠI HẠNG ANH", 
-            "LA LIGA", "SERIE A", "BUNDESLIGA", "LIGUE 1", "CHAMPIONS LEAGUE", "CÚP C1", 
+            "PREMIER LEAGUE", "NGOẠI HẠNG ANH", "LA LIGA 2", "LA LIGA", "SERIE B", "SERIE A", 
+            "BUNDESLIGA 2", "BUNDESLIGA", "LIGUE 2", "LIGUE 1", "CHAMPIONS LEAGUE", "CÚP C1", 
             "EUROPA LEAGUE", "CÚP C2", "CONFERENCE LEAGUE", "CÚP C3", "CÚP C4", "AFC CHAMPIONS LEAGUE", 
             "AFC CUP", "FA CUP", "CARABAO CUP", "CÚP NHÀ VUA", "COPPA ITALIA", "MLS", "SAUDI PRO LEAGUE", 
             "WORLD CUP", "FIFA WORLD CUP", "COPPA AMERICA", "EURO", "SIÊU CÚP", "SUPER CUP",
-            "CÚP LIÊN ĐOÀN", "CUP LIÊN ĐOÀN", "HẠNG NHẤT ANH", "CHAMPIONSHIP", "LIGUE 2", "SERIE B",
-            "BUNDESLIGA 2", "LA LIGA 2", "J-LEAGUE", "K-LEAGUE", "THAI LEAGUE",
-            "SPA D1", "SPA D2", "SPA D3", "ENG PR", "ENG CH", "ENG D1", "ENG D2", "ITA A", "ITA B", "GER 1", "GER 2", "FRA 1", "FRA 2"
+            "CÚP LIÊN ĐOÀN", "CUP LIÊN ĐOÀN", "HẠNG NHẤT ANH", "CHAMPIONSHIP", "J-LEAGUE", "J1 LEAGUE", 
+            "K-LEAGUE", "THAI LEAGUE", "SPA D1", "SPA D2", "SPA D3", "ENG PR", "ENG CH", "ENG D1", "ENG D2", 
+            "ITA A", "ITA B", "GER 1", "GER 2", "FRA 1", "FRA 2"
         ];
 
         let mainSiteLogo = "https://cdn-icons-png.flaticon.com/512/8112/8112602.png";
@@ -84,41 +84,35 @@ module.exports = async function handler(req, res) {
                 .trim();
         }
 
+        // Tinh chỉnh làm sạch tên đội và xóa triệt để tên giải bị dính liền
         function extractCleanTeam(teamStr) {
             if (!teamStr) return "";
-            let clean = ultraClean(teamStr);
+            let clean = teamStr;
+
+            // Xóa tên giải đấu đứng ở đầu chuỗi (kể cả dính liền không khoảng trắng)
+            const sortedLeagues = KNOWN_LEAGUES.slice().sort((x, y) => y.length - x.length);
+            for (let lg of sortedLeagues) {
+                let escapeLg = lg.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                let regexLg = new RegExp(`^\\s*${escapeLg}\\s*`, "gi");
+                clean = clean.replace(regexLg, '');
+            }
+
+            clean = ultraClean(clean);
             clean = clean.replace(/^[W|M]\s+/i, '');
             clean = clean.replace(/^(two|one|three|four|five|six|seven|eight|nine|ten)\b/gi, '');
             clean = clean.replace(/^\d{1,2}[:\-]?\d{0,2}\s*/g, '');
             clean = clean.replace(/\b(SPA\s*D[1-3]|ENG\s*(D[1-4]|Ch|PR)|ITA\s*[A-C]|GER\s*[1-3]|FRA\s*[1-3]|POR\s*[1-2]|ARG\s*D[1-2]|BRA\s*D[1-2]|MEX\s*D[1-2]|USA\s*MLS)\b/gi, ' ');
-            clean = clean.replace(/\b(Elite|UEFA|AFC|V[\.\-]League\s*\d*|J\d\s*League|SV\.League(\s+Nhật\s+Bản)?|Sultanlar\s+Ligi(\s+Nữ)?|Serie\s+A1(\s+Ý)?|Africa Cup of Nations(\s+Qualification|\s+Qualifiers)?|AFCON(\s+Qualification|\s+Qualifiers)?|World Cup(\s+Qualification|\s+Qualifiers)?|WC\s+(Qualifiers|Qualification)|UEFA Euro(\s+Qualification|\s+Qualifiers)?|Euro\s+Qualification|UEFA Nations League|Nations League|Asian Cup(\s+Qualification)?|Cúp Vùng Vịnh|Cup Vùng Vịnh|Gulf Cup|Cúp Quốc Gia|Cup Quốc Gia)\b/gi, ' ');
-            
-            const sortedLeagues = KNOWN_LEAGUES.sort((x, y) => y.length - x.length);
-            for (let lg of sortedLeagues) {
-                // Thêm biên từ hoặc khoảng trắng để tránh dính liền chữ cái đầu của đội (vd: Serie A + AC Milan)
-                let regexLg = new RegExp(`(^|\\s+)${lg.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(\\s+|$)`, "ig");
-                clean = clean.replace(regexLg, ' ');
-            }
+            clean = clean.replace(/\bBLV\b/gi, ''); // Xóa chữ BLV thừa
+
             return ultraClean(clean);
         }
 
         const matchDict = {};
-        const aTagRegex = /<a\s+[^>]*href=["']([^"']+)["'][^>]*>(.*?)<\/a>/gis;
-        let match;
 
-        while ((match = aTagRegex.exec(html)) !== null) {
-            const href = match[1];
-            let rawText = match[2].replace(/<[^>]*>/g, '').trim();
-            
-            // Mở rộng bộ lọc href để bắt mọi đường dẫn trực tiếp / trận đấu / live / xem
-            if (!href || !(/(\/tran-dau\/|\/truc-tiep\/|\/live\/|\/xem\/|\/phat-truc-tiep\/)/.test(href))) continue;
-            if (!rawText || rawText.length < 5) continue;
-
+        // Hàm trích xuất dữ liệu từ một chuỗi thô thu thập được
+        function processRawMatch(href, rawText) {
+            if (!href || !rawText || rawText.length < 4) return;
             let text = rawText.replace(/\n/g, ' ').replace(/\s+/g, ' ').trim();
-            
-            // Nhận diện trận đấu (bao gồm cả trận đang đá có tỷ số / phút đấu / live)
-            const isMatch = /VS|vs|Trực tiếp|Sắp diễn ra|Đang đá|Live|\b\d{1,3}'|\b\d{1,2}\s*[:\-]\s*\d{1,2}\b/i.test(text);
-            if (!isMatch) continue;
 
             let timeStr = "", dateStr = "";
             const timeMatch = text.match(/\b([0-1]?[0-9]|2[0-3]):([0-5][0-9])\b/);
@@ -133,34 +127,28 @@ module.exports = async function handler(req, res) {
             }
             text = text.replace(/\b202\d\b/g, ' '); 
 
-            if (text.includes('/')) {
-                let partsSlash = text.split('/');
-                let lastPart = partsSlash[partsSlash.length - 1];
-                if (/VS|vs/i.test(lastPart) || /\d{1,2}\s*[:\-]\s*\d{1,2}/.test(lastPart)) {
-                    text = lastPart;
-                }
-            }
-
-            // Thay thế tỷ số trận đang đá (vd: 0:1, 0-0) thành VS để chuẩn hóa
+            // Chuẩn hóa tỷ số hoặc các phân tách trận đấu thành ' VS '
             text = text.replace(/\b\d{1,2}\s*[:\-]\s*\d{1,2}\b/g, ' VS ');
             text = text.replace(/\s+-\s+/g, ' VS ').replace(/\bvs\b/gi, ' VS ');
             text = text.replace(/\b\d{1,3}(\+\d+)?'/g, ' ');
             text = text.replace(/Trực tiếp|Trực Tiếp|Đang đá|Đang live|\bLIVE\b|Sắp diễn ra/ig, ' ');
 
-            if (!text.includes("VS")) continue;
+            if (!text.includes("VS")) return;
 
-            const sortedLeagues = KNOWN_LEAGUES.sort((x, y) => y.length - x.length);
+            // Xóa tên giải đấu nằm trong chuỗi
+            const sortedLeagues = KNOWN_LEAGUES.slice().sort((x, y) => y.length - x.length);
             for (let lg of sortedLeagues) {
-                let regexLg = new RegExp(`\\b${lg.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, "ig");
+                let escapeLg = lg.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                let regexLg = new RegExp(`${escapeLg}`, "gi");
                 text = text.replace(regexLg, ' ');
             }
 
+            // Tìm bình luận viên
             let foundBlvs = [];
             const sortedBlvs = Object.keys(blvStreamMap).sort((x, y) => y.length - x.length);
             for (let blv of sortedBlvs) {
                 let escapeBlv = blv.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-                // Xử lý triệt để từ "BLV" đứng liền trước tên BLV (vd: AtalantaBLV -> Atalanta)
-                let regex = new RegExp(`(BLV\\s*\\-\\s*|BLV\\s*)?(${escapeBlv})`, "gi");
+                let regex = new RegExp(`(BLV\\s*)?(${escapeBlv})`, "gi");
                 if (regex.test(text)) {
                     let stdName = (blv === "Gà") ? "Gà Rừng" : (blv === "Pháo") ? "Pháo Thủ" : blv;
                     if (!foundBlvs.includes(stdName)) foundBlvs.push(stdName);
@@ -187,9 +175,9 @@ module.exports = async function handler(req, res) {
                 team1 = extractCleanTeam(parts[0]); 
                 team2 = extractCleanTeam(parts[1]); 
             } else { 
-                continue; 
+                return; 
             }
-            if (!team1 || !team2) continue; 
+            if (!team1 || !team2) return; 
 
             let timeDateDisplay = timeStr;
             if (timeStr && dateStr) timeDateDisplay = `${timeStr} - ${dateStr}`;
@@ -211,10 +199,38 @@ module.exports = async function handler(req, res) {
             }
         }
 
+        // 1. Quét từ thẻ <a> chuẩn HTML
+        const aTagRegex = /<a\s+[^>]*href=["']([^"']+)["'][^>]*>(.*?)<\/a>/gis;
+        let match;
+        while ((match = aTagRegex.exec(html)) !== null) {
+            const href = match[1];
+            let rawText = match[2].replace(/<[^>]*>/g, '').trim();
+            processRawMatch(href, rawText);
+        }
+
+        // 2. Quét thêm từ cấu trúc Script/JSON động nhúng trong HTML (Bắt các trận ẩn / xem thêm)
+        const jsonMatch = html.match(/<script[^>]*id=["']__NEXT_DATA__["'][^>]*>(.*?)<\/script>/s) || html.match(/window\.__INITIAL_STATE__\s*=\s*({.*?});/s);
+        if (jsonMatch && jsonMatch[1]) {
+            try {
+                const data = JSON.parse(jsonMatch[1]);
+                const strData = JSON.stringify(data);
+                const matchMatches = strData.match(/{"id":[^}]*}/g) || [];
+                for (let mItem of matchMatches) {
+                    try {
+                        let itemObj = JSON.parse(mItem);
+                        if (itemObj.home_name && itemObj.away_name) {
+                            let text = `${itemObj.home_name} VS ${itemObj.away_name}`;
+                            if (itemObj.commentator_name) text += ` BLV ${itemObj.commentator_name}`;
+                            let link = itemObj.slug ? `/tran-dau/${itemObj.slug}` : `/live/${itemObj.id}`;
+                            processRawMatch(link, text);
+                        }
+                    } catch(e){}
+                }
+            } catch(e) {}
+        }
+
         const results = [];
         const vlcOpt = "#EXTVLCOPT:http-user-agent=Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36";
-
-        // Đổi tên nhóm thành Xôi Chè TV theo yêu cầu
         const groupTitle = "Xôi Chè TV";
 
         for (let key in matchDict) {
