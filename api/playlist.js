@@ -1,27 +1,23 @@
-const cheerio = require('cheerio');
-
 module.exports = async function handler(req, res) {
     res.setHeader('Content-Type', 'text/plain; charset=utf-8');
     res.setHeader('Cache-Control', 's-maxage=60, stale-while-revalidate=30');
 
     try {
         const TARGET_URL = "https://xoiche.live";
-        // Sử dụng cổng trung gian mã hóa để vượt qua bộ lọc chặn IP của Cloudflare trên Vercel
         const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(TARGET_URL)}`;
         
         const response = await fetch(proxyUrl, {
             headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
             }
         });
         
         if (!response.ok) {
-            throw new Error(`Không thể tải dữ liệu qua cổng trung gian: ${response.status}`);
+            return res.status(200).send(`#EXTM3U\n\n#EXTINF:-1, Không thể tải trang nguồn (${response.status})`);
         }
 
         const html = await response.text();
-        const $ = cheerio.load(html);
-
+        
         const blvStreamMap = {
             "KaKa": "https://luong.phaohoa.live/live/phaohoa7/index.m3u8",
             "Tiểu Mây": "https://luong.phaohoa.live/live/phaohoa9/index.m3u8",
@@ -71,14 +67,12 @@ module.exports = async function handler(req, res) {
             "SPA D1", "SPA D2", "SPA D3", "ENG PR", "ENG CH", "ENG D1", "ENG D2", "ITA A", "ITA B", "GER 1", "GER 2", "FRA 1", "FRA 2"
         ];
 
-        let mainSiteLogo = "https://cdn-icons-png.flaticon.com/512/8112/8112602.png"; 
-        $('img').each((_, img) => {
-            let src = $(img).attr('src') \vert{}\vert{}$(img).attr('data-src') || '';
-            if (src.toLowerCase().includes('logo') && !src.toLowerCase().includes('svg')) {
-                mainSiteLogo = src.startsWith('http') ? src : TARGET_URL + (src.startsWith('/') ? '' : '/') + src;
-                return false; 
-            }
-        });
+        let mainSiteLogo = "https://cdn-icons-png.flaticon.com/512/8112/8112602.png";
+        const logoMatch = html.match(/<img[^>]+src=["']([^"']*logo[^"']*)["'][^>]*>/i);
+        if (logoMatch && logoMatch[1] && !logoMatch[1].includes('svg')) {
+            let src = logoMatch[1];
+            mainSiteLogo = src.startsWith('http') ? src : TARGET_URL + (src.startsWith('/') ? '' : '/') + src;
+        }
 
         function ultraClean(str) {
             if (!str) return "";
@@ -108,25 +102,18 @@ module.exports = async function handler(req, res) {
         }
 
         const matchDict = {};
-        const links = $('a[href*="/tran-dau/"], a[href*="/truc-tiep/"], a[href*="/live/"], a[href*="/xem/"]');
+        const aTagRegex = /<a\s+[^>]*href=["']([^"']+)["'][^>]*>(.*?)<\/a>/gis;
+        let match;
 
-        links.each((_, el) => {
-            const a = $(el);
-            const href = a.attr('href');
-            if (!href) return;
-
-            let card = a;
-            let rawText = card.text() || "";
-            if ((!rawText || rawText.length < 5) && a.parent().length) {
-                card = a.parent();
-                rawText = card.text() || "";
-            }
+        while ((match = aTagRegex.exec(html)) !== null) {
+            const href = match[1];
+            let rawText = match[2].replace(/<[^>]*>/g, '').trim();
+            if (!href || !(/(\/tran-dau\/|\/truc-tiep\/|\/live\/|\/xem\/)/.test(href))) continue;
+            if (!rawText || rawText.length < 5) continue;
 
             let text = rawText.replace(/\n/g, ' ').replace(/\s+/g, ' ').trim();
-            if (!text || text.length < 5) return;
-
             const isMatch = /VS|vs|Trực tiếp|Sắp diễn ra|\b\d{1,3}'|\b\d{1,2}\s*[:\-]\s*\d{1,2}\b/i.test(text);
-            if (!isMatch) return;
+            if (!isMatch) continue;
 
             let timeStr = "", dateStr = "";
             const timeMatch = text.match(/\b([0-1]?[0-9]|2[0-3]):([0-5][0-9])\b/);
@@ -154,7 +141,7 @@ module.exports = async function handler(req, res) {
             text = text.replace(/\b\d{1,3}(\+\d+)?'/g, ' ');
             text = text.replace(/Trực tiếp|Trực Tiếp|Đang đá|Đang live|\bLIVE\b|Sắp diễn ra/ig, ' ');
 
-            if (!text.includes("VS")) return;
+            if (!text.includes("VS")) continue;
 
             const sortedLeagues = KNOWN_LEAGUES.sort((x, y) => y.length - x.length);
             for (let lg of sortedLeagues) {
@@ -193,9 +180,9 @@ module.exports = async function handler(req, res) {
                 team1 = extractCleanTeam(parts[0]); 
                 team2 = extractCleanTeam(parts[1]); 
             } else { 
-                return; 
+                continue; 
             }
-            if (!team1 || !team2) return; 
+            if (!team1 || !team2) continue; 
 
             let timeDateDisplay = timeStr;
             if (timeStr && dateStr) timeDateDisplay = `${timeStr} - ${dateStr}`;
@@ -215,7 +202,7 @@ module.exports = async function handler(req, res) {
                     if (!matchDict[dictKey].blvs.includes(b)) matchDict[dictKey].blvs.push(b);
                 }
             }
-        });
+        }
 
         const results = [];
         const vlcOpt = "#EXTVLCOPT:http-user-agent=Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36";
@@ -242,12 +229,12 @@ module.exports = async function handler(req, res) {
         }
 
         const finalM3U = results.length === 0 
-            ? "#EXTM3U\n\n#EXTINF:-1, Không tìm thấy trận đấu." 
+            ? "#EXTM3U\n\n#EXTINF:-1, Không tìm thấy trận đấu nào." 
             : "#EXTM3U\n\n" + results.join("\n\n");
 
         return res.status(200).send(finalM3U);
 
     } catch (error) {
-        return res.status(200).send(`#EXTM3U\n\n#EXTINF:-1, Lỗi kết nối: ${error.message}`);
+        return res.status(200).send(`#EXTM3U\n\n#EXTINF:-1, Lỗi hệ thống: ${error.message}`);
     }
 };
