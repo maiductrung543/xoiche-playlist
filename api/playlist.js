@@ -4,33 +4,19 @@ module.exports = async function handler(req, res) {
 
     try {
         const TARGET_URL = "https://xoiche.live";
-        // Chuyển sang proxy codetabs ít bị chặn hơn
-        const proxyUrl = `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(TARGET_URL)}`;
         
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 8000);
+        // Gọi trực tiếp xoiche.live từ Vercel serverless (không bị dính CORS)
+        const response = await fetch(TARGET_URL, {
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                'Accept-Language': 'vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7'
+            }
+        });
 
-        let response;
-        try {
-            response = await fetch(proxyUrl, {
-                headers: {
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
-                    'Accept-Language': 'vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7',
-                    'Referer': 'https://xoiche.live/'
-                },
-                signal: controller.signal
-            });
-        } catch (e) {
-            clearTimeout(timeoutId);
-            res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' });
-            return res.end(`#EXTM3U\n\n#EXTINF:-1 group-title="Xôi Chè TV", Lỗi timeout kết nối nguồn\nhttp://invalid`);
-        }
-        clearTimeout(timeoutId);
-        
         if (!response.ok) {
             res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' });
-            return res.end(`#EXTM3U\n\n#EXTINF:-1 group-title="Xôi Chè TV", Không thể tải trang nguồn (${response.status})\nhttp://invalid`);
+            return res.end(`#EXTM3U\n\n#EXTINF:-1 group-title="Xôi Chè TV", Không thể truy cập trang nguồn (${response.status})\nhttp://invalid`);
         }
 
         const html = await response.text();
@@ -64,19 +50,24 @@ module.exports = async function handler(req, res) {
         };
 
         const KNOWN_LEAGUES = [
-            "AFRICA CUP OF NATIONS", "WORLD CUP", "UEFA EURO", "NATIONS LEAGUE", 
-            "SULTANLAR LIGI", "SV.LEAGUE", "SERIE A1", "TAURON LIGA",
+            "AFRICA CUP OF NATIONS QUALIFICATION", "AFRICA CUP OF NATIONS QUALIFIERS", "AFRICA CUP OF NATIONS", 
+            "AFCON QUALIFICATION", "AFCON QUALIFIERS", "AFCON", "WORLD CUP QUALIFICATION", "WORLD CUP QUALIFIERS", 
+            "WC QUALIFICATION", "WC QUALIFIERS", "UEFA EURO QUALIFICATION", "EURO QUALIFICATION", 
+            "UEFA NATIONS LEAGUE", "NATIONS LEAGUE", "SULTANLAR LIGI NỮ", "SULTANLAR LIGI", 
+            "SV.LEAGUE NHẬT BẢN", "SV.LEAGUE", "SERIE A1 Ý", "SERIE A1", "TAURON LIGA BA LAN NỮ", "TAURON LIGA",
             "ELITESERIEN", "LIGA MX", "INDIAN SUPER LEAGUE", "ACL ELITE", "ELITE", "UEFA", "AFC", 
             "CÚP VÙNG VỊNH", "CUP VÙNG VỊNH", "GULF CUP", "CÚP QUỐC GIA", "CUP QUỐC GIA", "NATIONAL CUP",
-            "ASIAD WOMEN", "ASIAD U23", "ASIAD", "ASIAN GAMES", "ASEAN CUP", "AFF CUP",
-            "GIAO HỮU", "CLUB FRIENDLIES", "FRIENDLY", "V-LEAGUE", "V.LEAGUE",
-            "PREMIER LEAGUE", "NGOẠI HẠNG ANH", "LA LIGA", "SERIE B", "SERIE A", 
-            "BUNDESLIGA", "LIGUE 2", "LIGUE 1", "CHAMPIONS LEAGUE", "CÚP C1", 
-            "EUROPA LEAGUE", "CÚP C2", "CONFERENCE LEAGUE", "CÚP C3", "CÚP C4", 
-            "AFC CUP", "FA CUP", "CARABAO CUP", "COPPA ITALIA", "MLS", "SAUDI PRO LEAGUE", 
-            "COPPA AMERICA", "EURO", "SUPER CUP", "HẠNG NHẤT ANH", "CHAMPIONSHIP", 
-            "J-LEAGUE", "K-LEAGUE", "THAI LEAGUE", "SPA D1", "SPA D2", "SPA D3", 
-            "ENG PR", "ENG CH", "ENG D1", "ENG D2", "ITA A", "ITA B", "GER 1", "GER 2", "FRA 1", "FRA 2"
+            "ASIAD WOMEN", "ASIAD U23", "ASIAD", "ASIAN GAMES", "FF ASEAN CUP", "ASEAN CUP", "AFF CUP",
+            "GIAO HỮU QT", "GIAO HỮU QUỐC TẾ", "GIAO HỮU CLB", "GIAO HỮU", "CLUB FRIENDLIES", "FRIENDLY",
+            "V-LEAGUE 1", "V-LEAGUE 2", "V-LEAGUE", "V.LEAGUE 1", "V.LEAGUE 2", "V.LEAGUE",
+            "PREMIER LEAGUE", "NGOẠI HẠNG ANH", "LA LIGA 2", "LA LIGA", "SERIE B", "SERIE A", 
+            "BUNDESLIGA 2", "BUNDESLIGA", "LIGUE 2", "LIGUE 1", "CHAMPIONS LEAGUE", "CÚP C1", 
+            "EUROPA LEAGUE", "CÚP C2", "CONFERENCE LEAGUE", "CÚP C3", "CÚP C4", "AFC CHAMPIONS LEAGUE", 
+            "AFC CUP", "FA CUP", "CARABAO CUP", "CÚP NHÀ VUA", "COPPA ITALIA", "MLS", "SAUDI PRO LEAGUE", 
+            "WORLD CUP", "FIFA WORLD CUP", "COPPA AMERICA", "EURO", "SIÊU CÚP", "SUPER CUP",
+            "CÚP LIÊN ĐOÀN", "CUP LIÊN ĐOÀN", "HẠNG NHẤT ANH", "CHAMPIONSHIP", "J-LEAGUE", "J1 LEAGUE", 
+            "K-LEAGUE", "THAI LEAGUE", "SPA D1", "SPA D2", "SPA D3", "ENG PR", "ENG CH", "ENG D1", "ENG D2", 
+            "ITA A", "ITA B", "GER 1", "GER 2", "FRA 1", "FRA 2"
         ];
 
         let mainSiteLogo = "https://cdn-icons-png.flaticon.com/512/8112/8112602.png";
@@ -198,9 +189,7 @@ module.exports = async function handler(req, res) {
 
         const aTagRegex = /<a\s+[^>]*href=["']([^"']+)["'][^>]*>(.*?)<\/a>/gis;
         let match;
-        let count = 0;
-        while ((match = aTagRegex.exec(html)) !== null && count < 250) {
-            count++;
+        while ((match = aTagRegex.exec(html)) !== null) {
             processRawMatch(match[1], match[2].replace(/<[^>]*>/g, '').trim());
         }
 
