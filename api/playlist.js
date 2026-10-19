@@ -5,17 +5,29 @@ module.exports = async function handler(req, res) {
     try {
         const TARGET_URL = "https://xoiche.live";
         
+        // Thêm các header giả lập trình duyệt thật để vượt qua lớp kiểm tra cơ bản của Cloudflare
         const response = await fetch(TARGET_URL, {
             headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-                'Accept-Language': 'vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7'
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+                'Accept-Language': 'vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7',
+                'Accept-Encoding': 'gzip, deflate, br',
+                'Referer': 'https://xoiche.live/',
+                'Sec-Ch-Ua': '"Chromium";v="124", "Google Chrome";v="124", "Not-A.Brand";v="99"',
+                'Sec-Ch-Ua-Mobile': '?0',
+                'Sec-Ch-Ua-Platform': '"Windows"',
+                'Sec-Fetch-Dest': 'document',
+                'Sec-Fetch-Mode': 'navigate',
+                'Sec-Fetch-Site': 'same-origin',
+                'Sec-Fetch-User': '?1',
+                'Upgrade-Insecure-Request': '1'
             }
         });
 
+        // Nếu bị chặn hoặc lỗi mạng, trả về M3U rỗng thay vì hiện thông báo lỗi lên TV
         if (!response.ok) {
             res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' });
-            return res.end(`#EXTM3U\n\n#EXTINF:-1 group-title="Xôi Chè TV", Không thể truy cập trang nguồn (${response.status})\nhttp://invalid`);
+            return res.end(`#EXTM3U\n`);
         }
 
         const html = await response.text();
@@ -77,7 +89,6 @@ module.exports = async function handler(req, res) {
             mainSiteLogo = src.startsWith('http') ? src : TARGET_URL + (src.startsWith('/') ? '' : '/') + src;
         }
 
-        // Hàm giải mã mã hóa HTML Entities (Sửa triệt để lỗi 39;, amp;, quot;,...)
         function decodeHTMLEntities(text) {
             if (!text) return "";
             return text
@@ -95,7 +106,6 @@ module.exports = async function handler(req, res) {
             if (!str) return "";
             let cleaned = decodeHTMLEntities(str);
             return cleaned
-                // Loại bỏ tàn dư mã entity như "39;", "amp;" hoặc các số rác đứng ở đầu
                 .replace(/^\s*\d+;\s*/g, '')
                 .replace(/^[a-z]+;\s*/gi, '')
                 .replace(/[\u{1F300}-\u{1F5FF}\u{1F600}-\u{1F64F}\u{1F680}-\u{1F6FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{1F900}-\u{1F9FF}\u{1FA70}-\u{1FAFF}]/gu, ' ')
@@ -173,25 +183,36 @@ module.exports = async function handler(req, res) {
             }
         }
 
-        // 1. Trích xuất từ Next.js Data nhúng ngầm
+        // 1. Trích xuất thông minh từ Next.js Data ngầm (sử dụng đệ quy để quét sâu vào JSON)
         const nextDataMatch = html.match(/<script[^>]*id=["']__NEXT_DATA__["'][^>]*>(.*?)<\/script>/s);
         if (nextDataMatch && nextDataMatch[1]) {
             try {
                 const nextData = JSON.parse(nextDataMatch[1]);
-                const strData = JSON.stringify(nextData);
-                const items = strData.match(/\{"[^}]*home_name[^}]*\}/g) || [];
-                for (let it of items) {
-                    try {
-                        let obj = JSON.parse(it);
-                        if (obj.home_name && obj.away_name) {
-                            addMatchToDict(obj.slug ? `/tran-dau/${obj.slug}` : '/', obj.home_name, obj.away_name, obj.match_time, obj.match_date, obj.commentator_name);
+                function findMatchesRecursive(obj) {
+                    if (!obj || typeof obj !== 'object') return;
+                    if (obj.home_name && obj.away_name) {
+                        addMatchToDict(
+                            obj.slug ? `/tran-dau/${obj.slug}` : (obj.id ? `/tran-dau/${obj.id}` : '/'), 
+                            obj.home_name, 
+                            obj.away_name, 
+                            obj.match_time || obj.time, 
+                            obj.match_date || obj.date, 
+                            obj.commentator_name || obj.blv
+                        );
+                    }
+                    for (let key in obj) {
+                        if (obj.hasOwnProperty(key)) {
+                            findMatchesRecursive(obj[key]);
                         }
-                    } catch(e){}
+                    }
+                }
+                if (nextData?.props?.pageProps) {
+                    findMatchesRecursive(nextData.props.pageProps);
                 }
             } catch (e) {}
         }
 
-        // 2. Quét HTML thô
+        // 2. Quét HTML thô dự phòng
         const blockRegex = /<a\s+[^>]*href=["']([^"']+)["'][^>]*>(.*?)<\/a>/gis;
         let match;
         while ((match = blockRegex.exec(html)) !== null) {
@@ -269,6 +290,6 @@ module.exports = async function handler(req, res) {
 
     } catch (error) {
         res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' });
-        return res.end(`#EXTM3U\n\n#EXTINF:-1 group-title="Xôi Chè TV", Lỗi hệ thống: ${error.message}\nhttp://invalid`);
+        return res.end(`#EXTM3U\n`);
     }
 };
