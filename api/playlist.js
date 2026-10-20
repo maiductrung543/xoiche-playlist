@@ -1,5 +1,5 @@
 module.exports = async function handler(req, res) {
-    // Thiết lập CORS và Content-Type chuẩn text/plain để tương thích hoàn hảo với link gộp và mọi app IPTV
+    // 1. Cấu hình CORS và Header để công cụ gộp link và mọi app IPTV đọc ổn định
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -138,6 +138,8 @@ module.exports = async function handler(req, res) {
             clean = clean.replace(/^[W|M]\s+/i, '');
             clean = clean.replace(/^\d{1,2}[:\-]?\d{0,2}\s*/g, '');
             clean = clean.replace(/\bBLV\b/gi, '');
+            
+            // Xóa chữ "AD" dính ở đầu tên đội bóng
             clean = clean.replace(/^AD\s+/i, '');
 
             return ultraClean(clean);
@@ -148,7 +150,13 @@ module.exports = async function handler(req, res) {
         function addMatchToDict(href, team1Raw, team2Raw, timeVal, dateVal, blvNameRaw) {
             let team1 = extractCleanTeam(team1Raw);
             let team2 = extractCleanTeam(team2Raw);
+            
+            // Lọc bỏ rác bản quyền / tiêu đề trang web
             if (!team1 || !team2) return;
+            if (team1.toLowerCase().includes("xôi chè") || team2.toLowerCase().includes("xôi chè") ||
+                team1.toLowerCase().includes("rights reserved") || team2.toLowerCase().includes("rights reserved")) {
+                return;
+            }
 
             let timeDisplay = timeVal || "";
             let dateDisplay = dateVal ? dateVal.replace('-', '/') : "";
@@ -192,7 +200,7 @@ module.exports = async function handler(req, res) {
             }
         }
 
-        // 1. Trích xuất thông minh từ Next.js Data ngầm (sử dụng đệ quy để quét sâu vào JSON)
+        // 1. Trích xuất thông minh từ Next.js Data ngầm (Sạch và chính xác nhất)
         const nextDataMatch = html.match(/<script[^>]*id=["']__NEXT_DATA__["'][^>]*>(.*?)<\/script>/s);
         if (nextDataMatch && nextDataMatch[1]) {
             try {
@@ -221,16 +229,12 @@ module.exports = async function handler(req, res) {
             } catch (e) {}
         }
 
-        // 2. Quét HTML thô dự phòng mở rộng (Quét cả thẻ a, div, li chứa thông tin trận đấu)
-        const blockRegex = /<(?:a|div|li)\s+[^>]*>(.*?)<\/(?:a|div|li)>/gis;
+        // 2. Quét thẻ <a> HTML thô dự phòng
+        const blockRegex = /<a\s+[^>]*href=["']([^"']+)["'][^>]*>(.*?)<\/a>/gis;
         let match;
         while ((match = blockRegex.exec(html)) !== null) {
-            let innerHtml = match[1];
-            // Lấy href nếu có trong khối
-            let hrefMatch = innerHtml.match(/href=["']([^"']+)["']/i);
-            const href = hrefMatch ? hrefMatch[1] : "";
-
-            let rawText = decodeHTMLEntities(innerHtml.replace(/<[^>]*>/g, ' ')).replace(/\s+/g, ' ').trim();
+            const href = match[1];
+            let rawText = decodeHTMLEntities(match[2].replace(/<[^>]*>/g, ' ')).replace(/\s+/g, ' ').trim();
 
             let timeMatch = rawText.match(/\b([0-1]?[0-9]|2[0-3]):([0-5][0-9])\b/);
             let dateMatch = rawText.match(/\b(\d{1,2})[/-\s](\d{1,2})\b/);
