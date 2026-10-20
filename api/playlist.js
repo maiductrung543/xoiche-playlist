@@ -1,4 +1,4 @@
-Module.exports = async function handler(req, res) {
+module.exports = async function handler(req, res) {
     res.setHeader('Content-Type', 'text/plain; charset=utf-8');
     res.setHeader('Cache-Control', 's-maxage=60, stale-while-revalidate=30');
 
