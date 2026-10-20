@@ -1,4 +1,4 @@
-module.exports = async function handler(req, res) {
+Module.exports = async function handler(req, res) {
     res.setHeader('Content-Type', 'text/plain; charset=utf-8');
     res.setHeader('Cache-Control', 's-maxage=60, stale-while-revalidate=30');
 
@@ -53,7 +53,7 @@ module.exports = async function handler(req, res) {
             "Khô Cay": "https://live.khoga.space/live/livehub9/index.m3u8",
             "Xôi Bắp": "https://live.khoga.space/live/livehub6/index.m3u8",
             "Tày": "https://live.khoga.space/live/livehub10/index.m3u8",
-            "Khô Mật": "https://live.khoga.space/live/livehub13/index.m3u8",
+            "Khô Mật": "https://live.khoga.space/live/livehub15/index.m3u8",
             "Khô Chè": "https://live.khoga.space/live/livehub5/index.m3u8",
             "Khô Bò": "https://live.khoga.space/live/livehub12/index.m3u8",
             "Xôi Gà": "https://live.khoga.space/live/livehub2/index.m3u8",
@@ -61,6 +61,7 @@ module.exports = async function handler(req, res) {
         };
 
         const KNOWN_LEAGUES = [
+            "AFC CHALLENGE LEAGUE", "CHALLENGE LEAGUE", "PRIMERA A", "LIGA 1", "LIGA 2",
             "SAUDI LEAGUE", "SAUDI PRO LEAGUE", "LIGA IU", "LIGA I", "LIGA II", "LIGA MX", "LIGA",
             "AFRICA CUP OF NATIONS QUALIFICATION", "AFRICA CUP OF NATIONS QUALIFIERS", "AFRICA CUP OF NATIONS", 
             "AFCON QUALIFICATION", "AFCON QUALIFIERS", "AFCON", "WORLD CUP QUALIFICATION", "WORLD CUP QUALIFIERS", 
@@ -131,6 +132,10 @@ module.exports = async function handler(req, res) {
             clean = clean.replace(/^[W|M]\s+/i, '');
             clean = clean.replace(/^\d{1,2}[:\-]?\d{0,2}\s*/g, '');
             clean = clean.replace(/\bBLV\b/gi, '');
+            
+            // Loại bỏ chữ/logo "AD" đứng độc lập ở đầu tên đội bóng
+            clean = clean.replace(/^AD\s+/i, '');
+
             return ultraClean(clean);
         }
 
