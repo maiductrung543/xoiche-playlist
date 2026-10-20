@@ -1,11 +1,9 @@
 module.exports = async function handler(req, res) {
-    // Thêm CORS header để các công cụ gộp link có thể fetch dữ liệu thành công
+    // Thiết lập CORS và Content-Type chuẩn text/plain để tương thích hoàn hảo với link gộp và mọi app IPTV
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-
-    // Đổi Content-Type sang chuẩn M3U/IPTV chuyên dụng thay vì text/plain
-    res.setHeader('Content-Type', 'application/vnd.apple.mpegurl; charset=utf-8');
+    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
     res.setHeader('Cache-Control', 's-maxage=60, stale-while-revalidate=30');
 
     if (req.method === 'OPTIONS') {
@@ -34,7 +32,7 @@ module.exports = async function handler(req, res) {
         });
 
         if (!response.ok) {
-            res.writeHead(200, { 'Content-Type': 'application/vnd.apple.mpegurl; charset=utf-8' });
+            res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' });
             return res.end(`#EXTM3U\n`);
         }
 
@@ -194,6 +192,7 @@ module.exports = async function handler(req, res) {
             }
         }
 
+        // 1. Trích xuất thông minh từ Next.js Data ngầm (sử dụng đệ quy để quét sâu vào JSON)
         const nextDataMatch = html.match(/<script[^>]*id=["']__NEXT_DATA__["'][^>]*>(.*?)<\/script>/s);
         if (nextDataMatch && nextDataMatch[1]) {
             try {
@@ -222,11 +221,16 @@ module.exports = async function handler(req, res) {
             } catch (e) {}
         }
 
-        const blockRegex = /<a\s+[^>]*href=["']([^"']+)["'][^>]*>(.*?)<\/a>/gis;
+        // 2. Quét HTML thô dự phòng mở rộng (Quét cả thẻ a, div, li chứa thông tin trận đấu)
+        const blockRegex = /<(?:a|div|li)\s+[^>]*>(.*?)<\/(?:a|div|li)>/gis;
         let match;
         while ((match = blockRegex.exec(html)) !== null) {
-            const href = match[1];
-            let rawText = decodeHTMLEntities(match[2].replace(/<[^>]*>/g, ' ')).replace(/\s+/g, ' ').trim();
+            let innerHtml = match[1];
+            // Lấy href nếu có trong khối
+            let hrefMatch = innerHtml.match(/href=["']([^"']+)["']/i);
+            const href = hrefMatch ? hrefMatch[1] : "";
+
+            let rawText = decodeHTMLEntities(innerHtml.replace(/<[^>]*>/g, ' ')).replace(/\s+/g, ' ').trim();
 
             let timeMatch = rawText.match(/\b([0-1]?[0-9]|2[0-3]):([0-5][0-9])\b/);
             let dateMatch = rawText.match(/\b(\d{1,2})[/-\s](\d{1,2})\b/);
@@ -294,11 +298,11 @@ module.exports = async function handler(req, res) {
             ? `#EXTM3U\n\n#EXTINF:-1 group-title="${groupTitle}", Không tìm thấy trận đấu nào.\nhttp://invalid` 
             : "#EXTM3U\n\n" + results.join("\n\n");
 
-        res.writeHead(200, { 'Content-Type': 'application/vnd.apple.mpegurl; charset=utf-8' });
+        res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' });
         return res.end(finalM3U);
 
     } catch (error) {
-        res.writeHead(200, { 'Content-Type': 'application/vnd.apple.mpegurl; charset=utf-8' });
+        res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' });
         return res.end(`#EXTM3U\n`);
     }
 };
