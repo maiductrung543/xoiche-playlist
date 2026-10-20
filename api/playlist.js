@@ -1,10 +1,10 @@
 module.exports = async function handler(req, res) {
-    // 1. Cấu hình CORS và Header để công cụ gộp link và mọi app IPTV đọc ổn định
+    // 1. Cấu hình CORS và Header
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
     res.setHeader('Content-Type', 'text/plain; charset=utf-8');
-    res.setHeader('Cache-Control', 's-maxage=60, stale-while-revalidate=30');
+    res.setHeader('Cache-Control', 's-maxage=120, stale-while-revalidate=60'); // Tăng nhẹ cache lên 2 phút
 
     if (req.method === 'OPTIONS') {
         return res.status(200).end();
@@ -32,7 +32,6 @@ module.exports = async function handler(req, res) {
         });
 
         if (!response.ok) {
-            res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' });
             return res.end(`#EXTM3U\n`);
         }
 
@@ -129,6 +128,7 @@ module.exports = async function handler(req, res) {
 
             const sortedLeagues = KNOWN_LEAGUES.slice().sort((x, y) => y.length - x.length);
             for (let lg of sortedLeagues) {
+                // FIX LỖI REGEX Ở ĐÂY
                 let escapeLg = lg.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
                 let regexLg = new RegExp(`^\\s*${escapeLg}\\s*`, "gi");
                 clean = clean.replace(regexLg, '');
@@ -138,8 +138,6 @@ module.exports = async function handler(req, res) {
             clean = clean.replace(/^[W|M]\s+/i, '');
             clean = clean.replace(/^\d{1,2}[:\-]?\d{0,2}\s*/g, '');
             clean = clean.replace(/\bBLV\b/gi, '');
-            
-            // Xóa chữ "AD" dính ở đầu tên đội bóng
             clean = clean.replace(/^AD\s+/i, '');
 
             return ultraClean(clean);
@@ -151,7 +149,6 @@ module.exports = async function handler(req, res) {
             let team1 = extractCleanTeam(team1Raw);
             let team2 = extractCleanTeam(team2Raw);
             
-            // Lọc bỏ rác bản quyền / tiêu đề trang web
             if (!team1 || !team2) return;
             if (team1.toLowerCase().includes("xôi chè") || team2.toLowerCase().includes("xôi chè") ||
                 team1.toLowerCase().includes("rights reserved") || team2.toLowerCase().includes("rights reserved")) {
@@ -160,15 +157,11 @@ module.exports = async function handler(req, res) {
 
             let timeDisplay = timeVal || "";
             let dateDisplay = dateVal ? dateVal.replace('-', '/') : "";
-
             let timeDateDisplay = "";
-            if (timeDisplay && dateDisplay) {
-                timeDateDisplay = `${timeDisplay} - ${dateDisplay}`;
-            } else if (timeDisplay) {
-                timeDateDisplay = timeDisplay;
-            } else if (dateDisplay) {
-                timeDateDisplay = dateDisplay;
-            }
+
+            if (timeDisplay && dateDisplay) timeDateDisplay = `${timeDisplay} - ${dateDisplay}`;
+            else if (timeDisplay) timeDateDisplay = timeDisplay;
+            else if (dateDisplay) timeDateDisplay = dateDisplay;
 
             let foundBlvs = [];
             if (blvNameRaw) {
@@ -200,7 +193,7 @@ module.exports = async function handler(req, res) {
             }
         }
 
-        // 1. Trích xuất thông minh từ Next.js Data ngầm (Sạch và chính xác nhất)
+        // 1. Trích xuất từ Next.js Data
         const nextDataMatch = html.match(/<script[^>]*id=["']__NEXT_DATA__["'][^>]*>(.*?)<\/script>/s);
         if (nextDataMatch && nextDataMatch[1]) {
             try {
@@ -229,7 +222,7 @@ module.exports = async function handler(req, res) {
             } catch (e) {}
         }
 
-        // 2. Quét thẻ <a> HTML thô dự phòng
+        // 2. Quét thẻ <a> HTML
         const blockRegex = /<a\s+[^>]*href=["']([^"']+)["'][^>]*>(.*?)<\/a>/gis;
         let match;
         while ((match = blockRegex.exec(html)) !== null) {
@@ -291,6 +284,7 @@ module.exports = async function handler(req, res) {
             if (data.blvs.length > 0) {
                 data.blvs.forEach(blv => {
                     const streamUrl = blvStreamMap[blv] || data.fallbackUrl;
+                    // Thêm thẻ tên kênh chuẩn M3U
                     results.push(`#EXTINF:-1 group-title="${groupTitle}" tvg-logo="${mainSiteLogo}", ${timeStr}${data.teams} (BLV ${blv})\n${vlcOpt}\n${streamUrl}`);
                 });
             } else {
@@ -302,11 +296,9 @@ module.exports = async function handler(req, res) {
             ? `#EXTM3U\n\n#EXTINF:-1 group-title="${groupTitle}", Không tìm thấy trận đấu nào.\nhttp://invalid` 
             : "#EXTM3U\n\n" + results.join("\n\n");
 
-        res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' });
         return res.end(finalM3U);
 
     } catch (error) {
-        res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' });
         return res.end(`#EXTM3U\n`);
     }
 };
