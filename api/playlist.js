@@ -1,11 +1,20 @@
 module.exports = async function handler(req, res) {
-    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+    // Thêm CORS header để các công cụ gộp link có thể fetch dữ liệu thành công
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
+    // Đổi Content-Type sang chuẩn M3U/IPTV chuyên dụng thay vì text/plain
+    res.setHeader('Content-Type', 'application/vnd.apple.mpegurl; charset=utf-8');
     res.setHeader('Cache-Control', 's-maxage=60, stale-while-revalidate=30');
+
+    if (req.method === 'OPTIONS') {
+        return res.status(200).end();
+    }
 
     try {
         const TARGET_URL = "https://xoiche.live";
         
-        // Thêm các header giả lập trình duyệt thật để vượt qua lớp kiểm tra cơ bản của Cloudflare
         const response = await fetch(TARGET_URL, {
             headers: {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
@@ -24,9 +33,8 @@ module.exports = async function handler(req, res) {
             }
         });
 
-        // Nếu bị chặn hoặc lỗi mạng, trả về M3U rỗng thay vì hiện thông báo lỗi lên TV
         if (!response.ok) {
-            res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' });
+            res.writeHead(200, { 'Content-Type': 'application/vnd.apple.mpegurl; charset=utf-8' });
             return res.end(`#EXTM3U\n`);
         }
 
@@ -132,8 +140,6 @@ module.exports = async function handler(req, res) {
             clean = clean.replace(/^[W|M]\s+/i, '');
             clean = clean.replace(/^\d{1,2}[:\-]?\d{0,2}\s*/g, '');
             clean = clean.replace(/\bBLV\b/gi, '');
-            
-            // Loại bỏ chữ/logo "AD" đứng độc lập ở đầu tên đội bóng
             clean = clean.replace(/^AD\s+/i, '');
 
             return ultraClean(clean);
@@ -188,7 +194,6 @@ module.exports = async function handler(req, res) {
             }
         }
 
-        // 1. Trích xuất thông minh từ Next.js Data ngầm (sử dụng đệ quy để quét sâu vào JSON)
         const nextDataMatch = html.match(/<script[^>]*id=["']__NEXT_DATA__["'][^>]*>(.*?)<\/script>/s);
         if (nextDataMatch && nextDataMatch[1]) {
             try {
@@ -217,7 +222,6 @@ module.exports = async function handler(req, res) {
             } catch (e) {}
         }
 
-        // 2. Quét HTML thô dự phòng
         const blockRegex = /<a\s+[^>]*href=["']([^"']+)["'][^>]*>(.*?)<\/a>/gis;
         let match;
         while ((match = blockRegex.exec(html)) !== null) {
@@ -290,11 +294,11 @@ module.exports = async function handler(req, res) {
             ? `#EXTM3U\n\n#EXTINF:-1 group-title="${groupTitle}", Không tìm thấy trận đấu nào.\nhttp://invalid` 
             : "#EXTM3U\n\n" + results.join("\n\n");
 
-        res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' });
+        res.writeHead(200, { 'Content-Type': 'application/vnd.apple.mpegurl; charset=utf-8' });
         return res.end(finalM3U);
 
     } catch (error) {
-        res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' });
+        res.writeHead(200, { 'Content-Type': 'application/vnd.apple.mpegurl; charset=utf-8' });
         return res.end(`#EXTM3U\n`);
     }
 };
