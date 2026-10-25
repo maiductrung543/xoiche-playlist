@@ -1,10 +1,10 @@
-module.exports = async function handler(req, res) {
+Module.exports = async function handler(req, res) {
     // 1. Cấu hình CORS và Header
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
     res.setHeader('Content-Type', 'text/plain; charset=utf-8');
-    res.setHeader('Cache-Control', 's-maxage=120, stale-while-revalidate=60'); // Tăng nhẹ cache lên 2 phút
+    res.setHeader('Cache-Control', 's-maxage=120, stale-while-revalidate=60');
 
     if (req.method === 'OPTIONS') {
         return res.status(200).end();
@@ -65,7 +65,9 @@ module.exports = async function handler(req, res) {
             "Xôi Xoài": "https://live.khoga.space/live/livehub3/index.m3u8"
         };
 
+        // Bổ sung các giải đấu, quốc gia, thể loại bổ sung để lọc triệt để hơn
         const KNOWN_LEAGUES = [
+            "BA LAN NAM", "BA LAN NỮ", "BA LAN", "PLUSLIGA", 
             "AFC CHALLENGE LEAGUE", "CHALLENGE LEAGUE", "PRIMERA A", "LIGA 1", "LIGA 2",
             "SAUDI LEAGUE", "SAUDI PRO LEAGUE", "LIGA IU", "LIGA I", "LIGA II", "LIGA MX", "LIGA",
             "AFRICA CUP OF NATIONS QUALIFICATION", "AFRICA CUP OF NATIONS QUALIFIERS", "AFRICA CUP OF NATIONS", 
@@ -87,6 +89,12 @@ module.exports = async function handler(req, res) {
             "K-LEAGUE", "THAI LEAGUE", "EREDIVISIE", "PRIMEIRA LIGA", "SPA D1", "SPA D2", "SPA D3", 
             "ENG PR", "ENG CH", "ENG D1", "ENG D2", "ITA A", "ITA B", "GER 1", "GER 2", "FRA 1", "FRA 2"
         ];
+
+        // Từ điển quy đổi biệt danh / tên lóng về tên chuẩn
+        const teamAliasMap = {
+            "mân đàn": "Manchester Utd",
+            "man đỏ": "Manchester Utd"
+        };
 
         let mainSiteLogo = "https://cdn-icons-png.flaticon.com/512/8112/8112602.png";
         const logoMatch = html.match(/<img[^>]+src=["']([^"']*logo[^"']*)["'][^>]*>/i);
@@ -126,15 +134,25 @@ module.exports = async function handler(req, res) {
             let clean = decodeHTMLEntities(teamStr);
             clean = clean.replace(/([a-z])([A-Z])/g, '$1 $2');
 
+            // Xóa tên giải đấu (lọc từ dài đến ngắn)
             const sortedLeagues = KNOWN_LEAGUES.slice().sort((x, y) => y.length - x.length);
             for (let lg of sortedLeagues) {
-                // FIX LỖI REGEX Ở ĐÂY
                 let escapeLg = lg.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
                 let regexLg = new RegExp(`^\\s*${escapeLg}\\s*`, "gi");
                 clean = clean.replace(regexLg, '');
             }
 
             clean = ultraClean(clean);
+
+            // Kiểm tra và quy đổi biệt danh nếu khớp
+            const lowerClean = clean.toLowerCase();
+            for (let alias in teamAliasMap) {
+                if (lowerClean === alias || lowerClean.includes(alias)) {
+                    clean = teamAliasMap[alias];
+                    break;
+                }
+            }
+
             clean = clean.replace(/^[W|M]\s+/i, '');
             clean = clean.replace(/^\d{1,2}[:\-]?\d{0,2}\s*/g, '');
             clean = clean.replace(/\bBLV\b/gi, '');
@@ -284,7 +302,6 @@ module.exports = async function handler(req, res) {
             if (data.blvs.length > 0) {
                 data.blvs.forEach(blv => {
                     const streamUrl = blvStreamMap[blv] || data.fallbackUrl;
-                    // Thêm thẻ tên kênh chuẩn M3U
                     results.push(`#EXTINF:-1 group-title="${groupTitle}" tvg-logo="${mainSiteLogo}", ${timeStr}${data.teams} (BLV ${blv})\n${vlcOpt}\n${streamUrl}`);
                 });
             } else {
