@@ -4,7 +4,7 @@ module.exports = async function handler(req, res) {
     res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
     res.setHeader('Content-Type', 'text/plain; charset=utf-8');
-    res.setHeader('Cache-Control', 's-maxage=120, stale-while-revalidate=60'); // Tăng nhẹ cache lên 2 phút
+    res.setHeader('Cache-Control', 's-maxage=120, stale-while-revalidate=60');
 
     if (req.method === 'OPTIONS') {
         return res.status(200).end();
@@ -13,26 +13,36 @@ module.exports = async function handler(req, res) {
     try {
         const TARGET_URL = "https://xoiche.live";
         
-        const response = await fetch(TARGET_URL, {
-            headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
-                'Accept-Language': 'vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7',
-                'Accept-Encoding': 'gzip, deflate, br',
-                'Referer': 'https://xoiche.live/',
-                'Sec-Ch-Ua': '"Chromium";v="124", "Google Chrome";v="124", "Not-A.Brand";v="99"',
-                'Sec-Ch-Ua-Mobile': '?0',
-                'Sec-Ch-Ua-Platform': '"Windows"',
-                'Sec-Fetch-Dest': 'document',
-                'Sec-Fetch-Mode': 'navigate',
-                'Sec-Fetch-Site': 'same-origin',
-                'Sec-Fetch-User': '?1',
-                'Upgrade-Insecure-Request': '1'
-            }
-        });
+        // Thêm Timeout (8 giây) để tránh bị treo request Serverless
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 8000);
+
+        let response;
+        try {
+            response = await fetch(TARGET_URL, {
+                signal: controller.signal,
+                headers: {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+                    'Accept-Language': 'vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7',
+                    'Accept-Encoding': 'gzip, deflate, br',
+                    'Referer': 'https://xoiche.live/',
+                    'Sec-Ch-Ua': '"Chromium";v="124", "Google Chrome";v="124", "Not-A.Brand";v="99"',
+                    'Sec-Ch-Ua-Mobile': '?0',
+                    'Sec-Ch-Ua-Platform': '"Windows"',
+                    'Sec-Fetch-Dest': 'document',
+                    'Sec-Fetch-Mode': 'navigate',
+                    'Sec-Fetch-Site': 'same-origin',
+                    'Sec-Fetch-User': '?1',
+                    'Upgrade-Insecure-Request': '1'
+                }
+            });
+        } finally {
+            clearTimeout(timeoutId);
+        }
 
         if (!response.ok) {
-            return res.end(`#EXTM3U\n`);
+            return res.status(200).end(`#EXTM3U\n`);
         }
 
         const html = await response.text();
@@ -62,11 +72,12 @@ module.exports = async function handler(req, res) {
             "Khô Chè": "https://live.khoga.space/live/livehub5/index.m3u8",
             "Khô Bò": "https://live.khoga.space/live/livehub12/index.m3u8",
             "Xôi Gà": "https://live.khoga.space/live/livehub2/index.m3u8",
-            "Xôi Xoài": "https://live.khoga.space/live/livehub3/index.m3u8"
+            "Xôi Xoài": "https://live.khoga.space/live/livehub3/index.m3u8",
+            "Lương Khô": "https://live.khoga.space/live/livehub16/index.m3u8"
         };
 
         const KNOWN_LEAGUES = [
-            "AFC CHALLENGE LEAGUE", "CHALLENGE LEAGUE", "PRIMERA A", "LIGA 1", "LIGA 2",
+            "A-LEAGUE MEN", "A-LEAGUE", "BA LAN NAM", "BA LAN", "AFC CHALLENGE LEAGUE", "CHALLENGE LEAGUE", "PRIMERA A", "LIGA 1", "LIGA 2",
             "SAUDI LEAGUE", "SAUDI PRO LEAGUE", "LIGA IU", "LIGA I", "LIGA II", "LIGA MX", "LIGA",
             "AFRICA CUP OF NATIONS QUALIFICATION", "AFRICA CUP OF NATIONS QUALIFIERS", "AFRICA CUP OF NATIONS", 
             "AFCON QUALIFICATION", "AFCON QUALIFIERS", "AFCON", "WORLD CUP QUALIFICATION", "WORLD CUP QUALIFIERS", 
@@ -126,9 +137,15 @@ module.exports = async function handler(req, res) {
             let clean = decodeHTMLEntities(teamStr);
             clean = clean.replace(/([a-z])([A-Z])/g, '$1 $2');
 
+            // Xóa các từ thừa / biệt danh không mong muốn (ví dụ: Mân Đàn)
+            const unwantedWords = ["Mân Đàn", "Mân", "Đàn"];
+            unwantedWords.forEach(word => {
+                let reg = new RegExp(`\\b${word}\\b`, 'gi');
+                clean = clean.replace(reg, '');
+            });
+
             const sortedLeagues = KNOWN_LEAGUES.slice().sort((x, y) => y.length - x.length);
             for (let lg of sortedLeagues) {
-                // FIX LỖI REGEX Ở ĐÂY
                 let escapeLg = lg.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
                 let regexLg = new RegExp(`^\\s*${escapeLg}\\s*`, "gi");
                 clean = clean.replace(regexLg, '');
@@ -284,7 +301,6 @@ module.exports = async function handler(req, res) {
             if (data.blvs.length > 0) {
                 data.blvs.forEach(blv => {
                     const streamUrl = blvStreamMap[blv] || data.fallbackUrl;
-                    // Thêm thẻ tên kênh chuẩn M3U
                     results.push(`#EXTINF:-1 group-title="${groupTitle}" tvg-logo="${mainSiteLogo}", ${timeStr}${data.teams} (BLV ${blv})\n${vlcOpt}\n${streamUrl}`);
                 });
             } else {
@@ -296,9 +312,10 @@ module.exports = async function handler(req, res) {
             ? `#EXTM3U\n\n#EXTINF:-1 group-title="${groupTitle}", Không tìm thấy trận đấu nào.\nhttp://invalid` 
             : "#EXTM3U\n\n" + results.join("\n\n");
 
-        return res.end(finalM3U);
+        return res.status(200).end(finalM3U);
 
     } catch (error) {
-        return res.end(`#EXTM3U\n`);
+        console.error("M3U Generator Error:", error);
+        return res.status(200).end(`#EXTM3U\n\n#EXTINF:-1 group-title="Error", Lỗi tạo playlist: ${error.message}\nhttp://invalid`);
     }
 };
