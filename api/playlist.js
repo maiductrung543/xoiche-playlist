@@ -54,13 +54,13 @@ module.exports = async function handler(req, res) {
             "Kền Kền": "https://luong.phaohoa.live/live/phaohoa6/index.m3u8",
             "Táo Dai": "https://livecdn.cdnfastter.xyz/live/livehub1/index.m3u8",
             "Xôi Gấc": "https://live.khoga.space/live/livehub11/index.m3u8",
-            "Tam Mao": "https://live.khoga.space/live/livehub8/index.m3u8",
-            "Khô Cay": "https://live.khoga.space/live/livehub9/index.m3u8",
-            "Xôi Bắp": "https://live.khoga.space/live/livehub6/index.m3u8",
+            "Tam Mao": "https://livecdn321.cdnfastter.xyz/live/live_65629930db/index.m3u8",
+            "Khô Cay": "https://livecdn321.cdnfastter.xyz/live/live_753c90457f/index.m3u8",
+            "Xôi Bắp": "https://livecdn321.cdnfastter.xyz/live/live_9f71176d0e/index.m3u8",
             "Tày": "https://live.khoga.space/live/livehub10/index.m3u8",
             "Khô Mật": "https://live.khoga.space/live/livehub15/index.m3u8",
-            "Khô Chè": "https://live.khoga.space/live/livehub5/index.m3u8",
-            "Khô Bò": "https://live.khoga.space/live/livehub12/index.m3u8",
+            "Khô Chè": "https://livecdn321.cdnfastter.xyz/live/live_a7657aeb05/index.m3u8",
+            "Khô Bò": "https://livecdn321.cdnfastter.xyz/live/live_f3d9c6a005/index.m3u8",
             "Lương Khô": "https://live.khoga.space/live/livehub2/index.m3u8",
             "Xôi Xoài": "https://live.khoga.space/live/livehub3/index.m3u8"
         };
