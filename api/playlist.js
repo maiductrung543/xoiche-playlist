@@ -58,7 +58,7 @@ module.exports = async function handler(req, res) {
             "Khô Cay": "https://livecdn321.cdnfastter.xyz/live/live_753c90457f/index.m3u8",
             "Xôi Bắp": "https://livecdn321.cdnfastter.xyz/live/live_9f71176d0e/index.m3u8",
             "Tày": "https://live.khoga.space/live/livehub10/index.m3u8",
-            "Khô Mật": "https://live.khoga.space/live/livehub15/index.m3u8",
+            "Khô Mật": "https://livecdn321.cdnfastter.xyz/live/live_b30ba5315c/index.m3u8",
             "Khô Chè": "https://livecdn321.cdnfastter.xyz/live/live_a7657aeb05/index.m3u8",
             "Khô Bò": "https://livecdn321.cdnfastter.xyz/live/live_f3d9c6a005/index.m3u8",
             "Lương Khô": "https://live.khoga.space/live/livehub2/index.m3u8",
