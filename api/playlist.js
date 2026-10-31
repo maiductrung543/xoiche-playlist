@@ -16,7 +16,6 @@ module.exports = async function handler(req, res) {
     try {
         const TARGET_URL = "https://xoiche.live";
         
-        // Thêm Timeout (7 giây) tránh Vercel timeout (10s limit)
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 7000);
 
@@ -80,6 +79,32 @@ module.exports = async function handler(req, res) {
             "Xôi Xoài": "https://livecdn321.cdnfastter.xyz/live/live_09982ecf49/index.m3u8"
         };
 
+        // Bổ sung thêm các giải đấu mới phát sinh từ hình ảnh (A-League Men, Efeler Ligi Thổ Nhĩ Kỳ Nam, v.v.)
+        const KNOWN_LEAGUES = [
+            "A-LEAGUE MEN", "A-LEAGUE", "EFELER LIGI THỔ NHĨ KỲ NAM", "EFELER LIGI", 
+            "BA LAN NAM", "BA LAN NỮ", "BA LAN", "PLUSLIGA", 
+            "AFC CHALLENGE LEAGUE", "CHALLENGE LEAGUE", "PRIMERA A", "LIGA 1", "LIGA 2",
+            "SAUDI LEAGUE", "SAUDI PRO LEAGUE", "LIGA IU", "LIGA I", "LIGA II", "LIGA MX", "LIGA",
+            "AFRICA CUP OF NATIONS QUALIFICATION", "AFRICA CUP OF NATIONS QUALIFIERS", "AFRICA CUP OF NATIONS", 
+            "AFCON QUALIFICATION", "AFCON QUALIFIERS", "AFCON", "WORLD CUP QUALIFICATION", "WORLD CUP QUALIFIERS", 
+            "WC QUALIFICATION", "WC QUALIFIERS", "UEFA EURO QUALIFICATION", "EURO QUALIFICATION", 
+            "UEFA NATIONS LEAGUE", "NATIONS LEAGUE", "SULTANLAR LIGI NỮ", "SULTANLAR LIGI", 
+            "SV.LEAGUE NHẬT BẢN", "SV.LEAGUE", "SERIE A1 Ý", "SERIE A1", "TAURON LIGA BA LAN NỮ", "TAURON LIGA",
+            "ELITESERIEN", "INDIAN SUPER LEAGUE", "SUPER LEAGUE", "ACL ELITE", "ELITE", "UEFA", "AFC", 
+            "CÚP VÙNG VỊNH", "CUP VÙNG VỊNH", "GULF CUP", "CÚP QUỐC GIA", "CUP QUỐC GIA", "NATIONAL CUP",
+            "ASIAD WOMEN", "ASIAD U23", "ASIAD", "ASIAN GAMES", "FF ASEAN CUP", "ASEAN CUP", "AFF CUP",
+            "GIAO HỮU QT", "GIAO HỮU QUỐC TẾ", "GIAO HỮU CLB", "GIAO HỮU", "CLUB FRIENDLIES", "FRIENDLY",
+            "V-LEAGUE 1", "V-LEAGUE 2", "V-LEAGUE", "V.LEAGUE 1", "V.LEAGUE 2", "V.LEAGUE",
+            "PREMIER LEAGUE", "NGOẠI HẠNG ANH", "LA LIGA 2", "LA LIGA", "SERIE B", "SERIE A", 
+            "BUNDESLIGA 2", "BUNDESLIGA", "LIGUE 2", "LIGUE 1", "CHAMPIONS LEAGUE", "CÚP C1", 
+            "EUROPA LEAGUE", "CÚP C2", "CONFERENCE LEAGUE", "CÚP C3", "CÚP C4", "AFC CHAMPIONS LEAGUE", 
+            "AFC CUP", "FA CUP", "CARABAO CUP", "CÚP NHÀ VUA", "COPPA ITALIA", "MLS", 
+            "WORLD CUP", "FIFA WORLD CUP", "COPPA AMERICA", "EURO", "SIÊU CÚP", "SUPER CUP",
+            "CÚP LIÊN ĐOÀN", "CUP LIÊN ĐOÀN", "HẠNG NHẤT ANH", "CHAMPIONSHIP", "J-LEAGUE", "J1 LEAGUE", 
+            "K-LEAGUE", "THAI LEAGUE", "EREDIVISIE", "PRIMEIRA LIGA", "SPA D1", "SPA D2", "SPA D3", 
+            "ENG PR", "ENG CH", "ENG D1", "ENG D2", "ITA A", "ITA B", "GER 1", "GER 2", "FRA 1", "FRA 2"
+        ];
+
         const teamAliasMap = {
             "mân đàn": "Manchester Utd",
             "man đỏ": "Manchester Utd"
@@ -118,27 +143,27 @@ module.exports = async function handler(req, res) {
                 .trim();
         }
 
-        function extractCleanTeam(teamStr, isLeftSide = true) {
+        function extractCleanTeam(teamStr) {
             if (!teamStr) return "";
             let clean = decodeHTMLEntities(teamStr);
             clean = clean.replace(/([a-z])([A-Z])/g, '$1 $2');
+
+            // Lọc giải đấu triệt để hơn bằng cách lặp lại việc xóa tên giải ở đầu chuỗi
+            let modified;
+            do {
+                modified = clean;
+                const sortedLeagues = KNOWN_LEAGUES.slice().sort((x, y) => y.length - x.length);
+                for (let lg of sortedLeagues) {
+                    let escapeLg = lg.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                    let regexLg = new RegExp(`^\\s*${escapeLg}\\s*`, "gi");
+                    if (regexLg.test(clean)) {
+                        clean = clean.replace(regexLg, '');
+                        break;
+                    }
+                }
+            } while (clean !== modified);
+
             clean = ultraClean(clean);
-
-            let words = clean.split(/\s+/).filter(w => w.length > 0);
-            
-            // Sử dụng điểm neo: Nếu là vế trái (Team 1), tên đội nằm ở cuối đoạn (lấy tối đa 3 từ cuối).
-            // Nếu là vế phải (Team 2), tên đội nằm ở đầu đoạn (lấy tối đa 3 từ đầu).
-            if (isLeftSide) {
-                if (words.length > 3) {
-                    words = words.slice(-3);
-                }
-            } else {
-                if (words.length > 3) {
-                    words = words.slice(0, 3);
-                }
-            }
-
-            clean = words.join(' ');
 
             const lowerClean = clean.toLowerCase();
             for (let alias in teamAliasMap) {
@@ -159,8 +184,8 @@ module.exports = async function handler(req, res) {
         const matchDict = {};
 
         function addMatchToDict(href, team1Raw, team2Raw, timeVal, dateVal, blvNameRaw) {
-            let team1 = extractCleanTeam(team1Raw, true);
-            let team2 = extractCleanTeam(team2Raw, false);
+            let team1 = extractCleanTeam(team1Raw);
+            let team2 = extractCleanTeam(team2Raw);
             
             if (!team1 || !team2) return;
             if (team1.toLowerCase().includes("xôi chè") || team2.toLowerCase().includes("xôi chè") ||
@@ -206,7 +231,7 @@ module.exports = async function handler(req, res) {
             }
         }
 
-        // 1. Trích xuất từ Next.js Data (Luôn chuẩn 100 từ JSON gốc)
+        // 1. Trích xuất từ Next.js Data
         const nextDataMatch = html.match(/<script[^>]*id=["']__NEXT_DATA__["'][^>]*>(.*?)<\/script>/s);
         if (nextDataMatch && nextDataMatch[1]) {
             try {
@@ -235,7 +260,7 @@ module.exports = async function handler(req, res) {
             } catch (e) {}
         }
 
-        // 2. Quét thẻ <a> HTML dựa trên Điểm Neo (VS Anchor Point)
+        // 2. Quét thẻ <a> HTML
         const blockRegex = /<a\s+[^>]*href=["']([^"']+)["'][^>]*>(.*?)<\/a>/gis;
         let match;
         while ((match = blockRegex.exec(html)) !== null) {
@@ -251,13 +276,27 @@ module.exports = async function handler(req, res) {
             if (timeStr) text = text.replace(timeStr, ' ');
             if (dateMatch) text = text.replace(dateMatch[0], ' ');
 
-            // Tìm điểm neo VS / vs
-            const vsRegex = /\bVS\b/i;
-            const vsIndex = text.search(vsRegex);
-            if (vsIndex === -1) continue;
+            text = text.replace(/\b\d{1,2}\s*[:\-]\s*\d{1,2}\b/g, ' VS ');
+            text = text.replace(/\s+-\s+/g, ' VS ').replace(/\bvs\b/gi, ' VS ');
+            text = text.replace(/\b\d{1,3}(\+\d+)?'/g, ' ');
+            text = text.replace(/Trực tiếp|Trực Tiếp|Đang đá|Đang live|\bLIVE\b|Sắp diễn ra/ig, ' ');
 
-            let leftSide = text.substring(0, vsIndex);
-            let rightSide = text.substring(vsIndex + 2);
+            if (!text.includes("VS")) continue;
+
+            // Xóa tên giải đấu lặp liên tục trong chuỗi HTML thô
+            let textModified;
+            do {
+                textModified = text;
+                const sortedLeagues = KNOWN_LEAGUES.slice().sort((x, y) => y.length - x.length);
+                for (let lg of sortedLeagues) {
+                    let escapeLg = lg.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                    let reg = new RegExp(`${escapeLg}`, "gi");
+                    if (reg.test(text)) {
+                        text = text.replace(reg, ' ');
+                        break;
+                    }
+                }
+            } while (text !== textModified);
 
             let foundBlv = "";
             const sortedBlvs = Object.keys(blvStreamMap).sort((x, y) => y.length - x.length);
@@ -266,18 +305,18 @@ module.exports = async function handler(req, res) {
                 let regex = new RegExp(`(BLV\\s*)?(${escapeBlv})`, "gi");
                 if (regex.test(text)) {
                     foundBlv = blv;
-                    break;
+                    text = text.replace(regex, ' ');
                 }
             }
 
-            const garbageWords = ["Nghỉ giữa hiệp", "Nghỉ giữa trận", "Đang diễn ra", "Đang đá", "Hiệp 1", "Hiệp 2", "HT", "FT", "CƯỢC", "FB88", "8Xbet", "SV368", "Nhà đài", "Tất cả", "Trận hot", "BLV", "Trực tiếp", "Trực Tiếp", "Đang live", "LIVE", "Sắp diễn ra"];
+            const garbageWords = ["Nghỉ giữa hiệp", "Nghỉ giữa trận", "Đang diễn ra", "Đang đá", "Hiệp 1", "Hiệp 2", "HT", "FT", "CƯỢC", "FB88", "8Xbet", "SV368", "Nhà đài", "Tất cả", "Trận hot", "BLV"];
             for (let g of garbageWords) {
-                leftSide = leftSide.replace(new RegExp(g, "ig"), ' ');
-                rightSide = rightSide.replace(new RegExp(g, "ig"), ' ');
+                text = text.replace(new RegExp(`(^|\\s)${g}(\\s|$)`, "ig"), ' ');
             }
 
-            if (leftSide && rightSide) {
-                addMatchToDict(href, leftSide, rightSide, timeStr, dateStr, foundBlv);
+            let parts = text.split('VS').map(p => ultraClean(p)).filter(p => p.length > 0);
+            if (parts.length >= 2) {
+                addMatchToDict(href, parts[0], parts[1], timeStr, dateStr, foundBlv);
             }
         }
 
