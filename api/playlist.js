@@ -51,7 +51,7 @@ module.exports = async function handler(req, res) {
             "Gà Rừng": "https://livecdn.cdnfastter.xyz/live/livehub4/index.m3u8",
             "Gà": "https://livecdn.cdnfastter.xyz/live/livehub4/index.m3u8",
             "Enzo": "https://luong.phaohoa.live/live/phaohoa2/index.m3u8",
-            "Kền Kền": "https://luong.phaohoa.live/live/phaohoa6/index.m3u8",
+            "Khô Cá": "https://luong.phaohoa.live/live/phaohoa6/index.m3u8",
             "Táo Dai": "https://livecdn.cdnfastter.xyz/live/livehub1/index.m3u8",
             "Xôi Gấc": "https://livecdn321.cdnfastter.xyz/live/live_5e3f2549e4/index.m3u8",
             "Tam Mao": "https://livecdn321.cdnfastter.xyz/live/live_65629930db/index.m3u8",
