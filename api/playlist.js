@@ -62,7 +62,7 @@ module.exports = async function handler(req, res) {
             "Khô Chè": "https://livecdn321.cdnfastter.xyz/live/live_a7657aeb05/index.m3u8",
             "Khô Bò": "https://livecdn321.cdnfastter.xyz/live/live_f3d9c6a005/index.m3u8",
             "Lương Khô": "https://live.khoga.space/live/livehub2/index.m3u8",
-            "Xôi Xoài": "https://live.khoga.space/live/livehub3/index.m3u8"
+            "Xôi Xoài": "https://livecdn321.cdnfastter.xyz/live/live_09982ecf49/index.m3u8"
         };
 
         // Bổ sung các giải đấu, quốc gia, thể loại bổ sung để lọc triệt để hơn
