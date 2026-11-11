@@ -79,8 +79,12 @@ module.exports = async function handler(req, res) {
             "Xôi Xoài": "https://livecdn321.cdnfastter.xyz/live/live_09982ecf49/index.m3u8"
         };
 
-        // Bổ sung thêm các giải đấu mới phát sinh từ hình ảnh (A-League Men, Efeler Ligi Thổ Nhĩ Kỳ Nam, v.v.)
         const KNOWN_LEAGUES = [
+            "SAFF CHAMPIONSHIP", "SAFF CUP", "SAFF",
+            "FRIENDLIES", "CLUB FRIENDLIES", "FRIENDLY",
+            "LIGA DE EXPANSION MX", "DE EXPANSION MX", "EXPANSION MX", "EXPANSION",
+            "J-LEAGUE CUP", "LEAGUE CUP", "J.LEAGUE CUP",
+            "COPA", "WOMEN'S", "WOMEN",
             "A-LEAGUE MEN", "A-LEAGUE", "EFELER LIGI THỔ NHĨ KỲ NAM", "EFELER LIGI", 
             "BA LAN NAM", "BA LAN NỮ", "BA LAN", "PLUSLIGA", 
             "AFC CHALLENGE LEAGUE", "CHALLENGE LEAGUE", "PRIMERA A", "LIGA 1", "LIGA 2",
@@ -148,7 +152,6 @@ module.exports = async function handler(req, res) {
             let clean = decodeHTMLEntities(teamStr);
             clean = clean.replace(/([a-z])([A-Z])/g, '$1 $2');
 
-            // Lọc giải đấu triệt để hơn bằng cách lặp lại việc xóa tên giải ở đầu chuỗi
             let modified;
             do {
                 modified = clean;
@@ -163,6 +166,7 @@ module.exports = async function handler(req, res) {
                 }
             } while (clean !== modified);
 
+            clean = clean.replace(/^(cup|saff|friendlies|de|pa|copa|fc|sc)\s+/gi, '');
             clean = ultraClean(clean);
 
             const lowerClean = clean.toLowerCase();
@@ -231,7 +235,7 @@ module.exports = async function handler(req, res) {
             }
         }
 
-        // 1. Trích xuất từ Next.js Data
+        // 1. Trích xuất từ Next.js Data (Hỗ trợ cả mảng BLV hoặc chuỗi gộp)
         const nextDataMatch = html.match(/<script[^>]*id=["']__NEXT_DATA__["'][^>]*>(.*?)<\/script>/s);
         if (nextDataMatch && nextDataMatch[1]) {
             try {
@@ -239,13 +243,17 @@ module.exports = async function handler(req, res) {
                 function findMatchesRecursive(obj) {
                     if (!obj || typeof obj !== 'object') return;
                     if (obj.home_name && obj.away_name) {
+                        let blvInput = obj.commentator_name || obj.blv || "";
+                        if (Array.isArray(blvInput)) {
+                            blvInput = blvInput.map(c => typeof c === 'string' ? c : (c.name || '')).join(" + ");
+                        }
                         addMatchToDict(
                             obj.slug ? `/tran-dau/${obj.slug}` : (obj.id ? `/tran-dau/${obj.id}` : '/'), 
                             obj.home_name, 
                             obj.away_name, 
                             obj.match_time || obj.time, 
                             obj.match_date || obj.date, 
-                            obj.commentator_name || obj.blv
+                            blvInput
                         );
                     }
                     for (let key in obj) {
@@ -260,7 +268,7 @@ module.exports = async function handler(req, res) {
             } catch (e) {}
         }
 
-        // 2. Quét thẻ <a> HTML
+        // 2. Quét thẻ <a> HTML (Đã sửa để gom toàn bộ BLV tìm được thay vì gán đè)
         const blockRegex = /<a\s+[^>]*href=["']([^"']+)["'][^>]*>(.*?)<\/a>/gis;
         let match;
         while ((match = blockRegex.exec(html)) !== null) {
@@ -283,7 +291,6 @@ module.exports = async function handler(req, res) {
 
             if (!text.includes("VS")) continue;
 
-            // Xóa tên giải đấu lặp liên tục trong chuỗi HTML thô
             let textModified;
             do {
                 textModified = text;
@@ -298,16 +305,20 @@ module.exports = async function handler(req, res) {
                 }
             } while (text !== textModified);
 
-            let foundBlv = "";
+            // GOM TẤT CẢ BLV KHỚP VÀO MẢNG THAY VÌ GÁN ĐÈ
+            let foundBlvsArr = [];
             const sortedBlvs = Object.keys(blvStreamMap).sort((x, y) => y.length - x.length);
             for (let blv of sortedBlvs) {
                 let escapeBlv = blv.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
                 let regex = new RegExp(`(BLV\\s*)?(${escapeBlv})`, "gi");
                 if (regex.test(text)) {
-                    foundBlv = blv;
+                    if (!foundBlvsArr.includes(blv)) {
+                        foundBlvsArr.push(blv);
+                    }
                     text = text.replace(regex, ' ');
                 }
             }
+            let foundBlvCombined = foundBlvsArr.join(" + ");
 
             const garbageWords = ["Nghỉ giữa hiệp", "Nghỉ giữa trận", "Đang diễn ra", "Đang đá", "Hiệp 1", "Hiệp 2", "HT", "FT", "CƯỢC", "FB88", "8Xbet", "SV368", "Nhà đài", "Tất cả", "Trận hot", "BLV"];
             for (let g of garbageWords) {
@@ -316,7 +327,7 @@ module.exports = async function handler(req, res) {
 
             let parts = text.split('VS').map(p => ultraClean(p)).filter(p => p.length > 0);
             if (parts.length >= 2) {
-                addMatchToDict(href, parts[0], parts[1], timeStr, dateStr, foundBlv);
+                addMatchToDict(href, parts[0], parts[1], timeStr, dateStr, foundBlvCombined);
             }
         }
 
