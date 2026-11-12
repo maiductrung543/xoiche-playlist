@@ -210,7 +210,9 @@ module.exports = async function handler(req, res) {
                 let cleanBlv = blvNameRaw.replace(/BLV\s*/gi, '').trim();
                 const sortedBlvs = Object.keys(blvStreamMap).sort((x, y) => y.length - x.length);
                 for (let b of sortedBlvs) {
-                    if (cleanBlv.toLowerCase().includes(b.toLowerCase())) {
+                    let escB = b.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                    let regexCheck = new RegExp(`(^|\\s)(${escB})(?=$|\\s|[.,!?])`, "gi");
+                    if (regexCheck.test(cleanBlv)) {
                         let stdName = (b === "Gà") ? "Gà Rừng" : (b === "Pháo") ? "Pháo Thủ" : b;
                         if (!foundBlvs.includes(stdName)) foundBlvs.push(stdName);
                     }
@@ -235,7 +237,7 @@ module.exports = async function handler(req, res) {
             }
         }
 
-        // 1. Trích xuất từ Next.js Data (Hỗ trợ cả mảng BLV hoặc chuỗi gộp)
+        // 1. Trích xuất từ Next.js Data
         const nextDataMatch = html.match(/<script[^>]*id=["']__NEXT_DATA__["'][^>]*>(.*?)<\/script>/s);
         if (nextDataMatch && nextDataMatch[1]) {
             try {
@@ -268,7 +270,7 @@ module.exports = async function handler(req, res) {
             } catch (e) {}
         }
 
-        // 2. Quét thẻ <a> HTML (Đã sửa để gom toàn bộ BLV tìm được thay vì gán đè)
+        // 2. Quét thẻ <a> HTML (Đã sửa lỗi quét nhầm ký tự bên trong tên đội)
         const blockRegex = /<a\s+[^>]*href=["']([^"']+)["'][^>]*>(.*?)<\/a>/gis;
         let match;
         while ((match = blockRegex.exec(html)) !== null) {
@@ -305,17 +307,17 @@ module.exports = async function handler(req, res) {
                 }
             } while (text !== textModified);
 
-            // GOM TẤT CẢ BLV KHỚP VÀO MẢNG THAY VÌ GÁN ĐÈ
+            // GOM TẤT CẢ BLV KHỚP (SỬ DỤNG RANH GIỚI TỪ ĐỂ KHÔNG BẮT DÍNH VÀO TÊN ĐỘI)
             let foundBlvsArr = [];
             const sortedBlvs = Object.keys(blvStreamMap).sort((x, y) => y.length - x.length);
             for (let blv of sortedBlvs) {
                 let escapeBlv = blv.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-                let regex = new RegExp(`(BLV\\s*)?(${escapeBlv})`, "gi");
+                let regex = new RegExp(`(^|\\s)(?:BLV\\s*)?(${escapeBlv})(?=$|\\s|[.,!?])`, "gi");
                 if (regex.test(text)) {
                     if (!foundBlvsArr.includes(blv)) {
                         foundBlvsArr.push(blv);
                     }
-                    text = text.replace(regex, ' ');
+                    text = text.replace(regex, '$1'); 
                 }
             }
             let foundBlvCombined = foundBlvsArr.join(" + ");
