@@ -1,3 +1,4 @@
+
 module.exports = async function handler(req, res) {
     // 1. Cấu hình CORS và Header
     res.setHeader('Access-Control-Allow-Origin', '*');
@@ -270,7 +271,7 @@ module.exports = async function handler(req, res) {
             } catch (e) {}
         }
 
-        // 2. Quét thẻ <a> HTML
+        // 2. Quét thẻ <a> HTML (Đã sửa lỗi quét nhầm ký tự bên trong tên đội)
         const blockRegex = /<a\s+[^>]*href=["']([^"']+)["'][^>]*>(.*?)<\/a>/gis;
         let match;
         while ((match = blockRegex.exec(html)) !== null) {
@@ -307,6 +308,7 @@ module.exports = async function handler(req, res) {
                 }
             } while (text !== textModified);
 
+            // GOM TẤT CẢ BLV KHỚP (SỬ DỤNG RANH GIỚI TỪ ĐỂ KHÔNG BẮT DÍNH VÀO TÊN ĐỘI)
             let foundBlvsArr = [];
             const sortedBlvs = Object.keys(blvStreamMap).sort((x, y) => y.length - x.length);
             for (let blv of sortedBlvs) {
@@ -337,8 +339,7 @@ module.exports = async function handler(req, res) {
 
         for (let key in matchDict) {
             const data = matchDict[key];
-            // ĐÃ BỎ NGOẶC: Thay vì [timeDate] thì giờ chỉ hiển thị dạng "timeDate - " hoặc bỏ trống nếu không có
-            const timeStr = data.timeDate ? `${data.timeDate} - ` : "";
+            const timeStr = data.timeDate ? `[${data.timeDate}] ` : "";
 
             if (data.blvs.length > 0) {
                 data.blvs.forEach(blv => {
